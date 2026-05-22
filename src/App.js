@@ -2,24 +2,36 @@ import { useState, useEffect } from "react";
 import 'bootstrap/dist/css/bootstrap.min.css';
 
 function App() {
+  const API = "https://gestion-stock-backend-5qm3.onrender.com";
+
   const [page, setPage] = useState("stock");
   const [donnees, setDonnees] = useState([]);
   const [recherche, setRecherche] = useState("");
   const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
   const [stats, setStats] = useState({ produits: 0, clients: 0, fournisseurs: 0, rupture: 0 });
   const [fournisseurs, setFournisseurs] = useState([]);
   const [clients, setClients] = useState([]);
   const [produits, setProduits] = useState([]);
   const [bon, setBon] = useState({ numero_bon: "", date_bon: "", id_fournisseur: "", id_client: "", observation: "" });
   const [lignes, setLignes] = useState([{ id_produit: "", quantite: "", prix_unitaire: "" }]);
-  const [message, setMessage] = useState("");
+  const [newProduit, setNewProduit] = useState({ code_produit: "", designation: "", unite: "", prix_achat: "", prix_vente: "", stock_minimum: "" });
+  const [newClient, setNewClient] = useState({ code_client: "", nom: "", telephone: "", adresse: "" });
+  const [newFournisseur, setNewFournisseur] = useState({ code_fournisseur: "", nom: "", telephone: "", adresse: "" });
+  const [showForm, setShowForm] = useState(false);
+  const [bonDetail, setBonDetail] = useState(null);
+  const [lignesDetail, setLignesDetail] = useState([]);
 
-  useEffect(() => {
+  // ✏️ NOUVEAUX ETATS POUR MODIFICATION
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [elementAModifier, setElementAModifier] = useState(null);
+
+  const chargerStats = () => {
     Promise.all([
-      fetch("https://gestion-stock-backend-5qm3.onrender.com/produits").then((r) => r.json()),
-      fetch("https://gestion-stock-backend-5qm3.onrender.com/clients").then((r) => r.json()),
-      fetch("https://gestion-stock-backend-5qm3.onrender.com/fournisseurs").then((r) => r.json()),
-      fetch("https://gestion-stock-backend-5qm3.onrender.com/stock").then((r) => r.json()),
+      fetch(`${API}/produits`).then((r) => r.json()),
+      fetch(`${API}/clients`).then((r) => r.json()),
+      fetch(`${API}/fournisseurs`).then((r) => r.json()),
+      fetch(`${API}/stock`).then((r) => r.json()),
     ]).then(([produits, clients, fournisseurs, stock]) => {
       setStats({
         produits: produits.length,
@@ -31,19 +43,24 @@ function App() {
       setClients(clients);
       setProduits(produits);
     });
-  }, []);
+  };
+
+  useEffect(() => { chargerStats(); }, []);
 
   useEffect(() => {
-    if (page === "bon-entree" || page === "bon-sortie") return;
+    if (["bon-entree", "bon-sortie"].includes(page)) return;
     setLoading(true);
     setDonnees([]);
     setRecherche("");
-    fetch(`https://gestion-stock-backend-5qm3.onrender.com/${page}`)
+    setShowForm(false);
+    setMessage("");
+    setBonDetail(null);
+    const url = page === "liste-entree" ? `${API}/bons-entree`
+      : page === "liste-sortie" ? `${API}/bons-sortie`
+      : `${API}/${page}`;
+    fetch(url)
       .then((res) => res.json())
-      .then((data) => {
-        setDonnees(data);
-        setLoading(false);
-      })
+      .then((data) => { setDonnees(data); setLoading(false); })
       .catch(() => setLoading(false));
   }, [page]);
 
@@ -53,14 +70,8 @@ function App() {
     setMessage("");
   };
 
-  const ajouterLigne = () => {
-    setLignes([...lignes, { id_produit: "", quantite: "", prix_unitaire: "" }]);
-  };
-
-  const supprimerLigne = (index) => {
-    setLignes(lignes.filter((_, i) => i !== index));
-  };
-
+  const ajouterLigne = () => setLignes([...lignes, { id_produit: "", quantite: "", prix_unitaire: "" }]);
+  const supprimerLigne = (index) => setLignes(lignes.filter((_, i) => i !== index));
   const modifierLigne = (index, champ, valeur) => {
     const newLignes = [...lignes];
     newLignes[index][champ] = valeur;
@@ -68,25 +79,14 @@ function App() {
   };
 
   const soumettreBon = async (type) => {
-    if (!bon.numero_bon || !bon.date_bon) {
-      setMessage("Veuillez remplir tous les champs obligatoires !");
-      return;
-    }
-    if (type === "bon-entree" && !bon.id_fournisseur) {
-      setMessage("Veuillez choisir un fournisseur !");
-      return;
-    }
-    if (type === "bon-sortie" && !bon.id_client) {
-      setMessage("Veuillez choisir un client !");
-      return;
-    }
-
+    if (!bon.numero_bon || !bon.date_bon) { setMessage("Champs obligatoires manquants !"); return; }
+    if (type === "bon-entree" && !bon.id_fournisseur) { setMessage("Choisissez un fournisseur !"); return; }
+    if (type === "bon-sortie" && !bon.id_client) { setMessage("Choisissez un client !"); return; }
     const body = type === "bon-entree"
       ? { numero_bon: bon.numero_bon, date_bon: bon.date_bon, id_fournisseur: bon.id_fournisseur, observation: bon.observation, lignes }
       : { numero_bon: bon.numero_bon, date_bon: bon.date_bon, id_client: bon.id_client, observation: bon.observation, lignes };
-
     try {
-      const response = await fetch(`https://gestion-stock-backend-5qm3.onrender.com/${type}`, {
+      const response = await fetch(`${API}/${type}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -95,19 +95,125 @@ function App() {
       if (data.success) {
         setMessage("Bon enregistre avec succes !");
         resetBon();
+        chargerStats();
       } else {
         setMessage("Erreur : " + data.error);
+      }
+    } catch (err) { setMessage("Erreur de connexion !"); }
+  };
+
+  const ajouterElement = async () => {
+    let url = "", body = {};
+    if (page === "produits") { url = `${API}/produits`; body = newProduit; }
+    else if (page === "clients") { url = `${API}/clients`; body = newClient; }
+    else if (page === "fournisseurs") { url = `${API}/fournisseurs`; body = newFournisseur; }
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await response.json();
+      if (data.success) {
+        setMessage("Ajoute avec succes !");
+        setShowForm(false);
+        setNewProduit({ code_produit: "", designation: "", unite: "", prix_achat: "", prix_vente: "", stock_minimum: "" });
+        setNewClient({ code_client: "", nom: "", telephone: "", adresse: "" });
+        setNewFournisseur({ code_fournisseur: "", nom: "", telephone: "", adresse: "" });
+        fetch(`${API}/${page}`).then((r) => r.json()).then(setDonnees);
+        chargerStats();
+      } else { setMessage("Erreur : " + data.error); }
+    } catch (err) { setMessage("Erreur de connexion !"); }
+  };
+
+  const supprimerElement = async (id) => {
+    if (!window.confirm("Confirmer la suppression ?")) return;
+    let url = "";
+    if (page === "produits") url = `${API}/produits/${id}`;
+    else if (page === "clients") url = `${API}/clients/${id}`;
+    else if (page === "fournisseurs") url = `${API}/fournisseurs/${id}`;
+    try {
+      const response = await fetch(url, { method: "DELETE" });
+      const data = await response.json();
+      if (data.success) {
+        setMessage("Supprime avec succes !");
+        fetch(`${API}/${page}`).then((r) => r.json()).then(setDonnees);
+        chargerStats();
+      } else { setMessage("Erreur : " + data.error); }
+    } catch (err) { setMessage("Erreur de connexion !"); }
+  };
+
+  // ✏️ NOUVELLE FONCTION — Ouvrir le modal de modification
+  const ouvrirModification = (element) => {
+    setElementAModifier({ ...element });
+    setShowEditModal(true);
+  };
+
+  // ✏️ NOUVELLE FONCTION — Enregistrer la modification
+  const enregistrerModification = async () => {
+    let url = "";
+    if (page === "produits") url = `${API}/produits/${elementAModifier.id_produit}`;
+    else if (page === "clients") url = `${API}/clients/${elementAModifier.id_client}`;
+    else if (page === "fournisseurs") url = `${API}/fournisseurs/${elementAModifier.id_fournisseur}`;
+    try {
+      const response = await fetch(url, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(elementAModifier),
+      });
+      const data = await response.json();
+      if (data.id_produit || data.id_client || data.id_fournisseur) {
+        setMessage("Modifie avec succes !");
+        setShowEditModal(false);
+        setElementAModifier(null);
+        fetch(`${API}/${page}`).then((r) => r.json()).then(setDonnees);
+        chargerStats();
+      } else {
+        setMessage("Erreur lors de la modification !");
       }
     } catch (err) {
       setMessage("Erreur de connexion !");
     }
   };
 
+  const supprimerBon = async (id, type) => {
+    if (!window.confirm("Confirmer la suppression de ce bon ?")) return;
+    const url = type === "entree" ? `${API}/bons-entree/${id}` : `${API}/bons-sortie/${id}`;
+    try {
+      const response = await fetch(url, { method: "DELETE" });
+      const data = await response.json();
+      if (data.success) {
+        setMessage("Bon supprime avec succes !");
+        setBonDetail(null);
+        const listeUrl = type === "entree" ? `${API}/bons-entree` : `${API}/bons-sortie`;
+        fetch(listeUrl).then((r) => r.json()).then(setDonnees);
+        chargerStats();
+      } else { setMessage("Erreur : " + data.error); }
+    } catch (err) { setMessage("Erreur de connexion !"); }
+  };
+
+  const voirDetailBon = async (bon, type) => {
+    setBonDetail(bon);
+    const url = type === "entree"
+      ? `${API}/bons-entree/${bon.id_bon_entree}/lignes`
+      : `${API}/bons-sortie/${bon.id_bon_sortie}/lignes`;
+    const lignes = await fetch(url).then((r) => r.json());
+    setLignesDetail(lignes);
+  };
+
   const colonnes = {
     stock: ["code_produit", "designation", "unite", "total_entree", "total_sortie", "stock_actuel"],
-    produits: ["code_produit", "designation", "unite", "prix_achat", "prix_vente"],
+    produits: ["code_produit", "designation", "unite", "prix_achat", "prix_vente", "stock_minimum"],
     clients: ["code_client", "nom", "telephone", "adresse"],
     fournisseurs: ["code_fournisseur", "nom", "telephone", "adresse"],
+    "liste-entree": ["numero_bon", "date_bon", "nom_fournisseur", "observation"],
+    "liste-sortie": ["numero_bon", "date_bon", "nom_client", "observation"],
+  };
+
+  const idCols = {
+    produits: "id_produit",
+    clients: "id_client",
+    fournisseurs: "id_fournisseur",
   };
 
   const titres = {
@@ -115,132 +221,216 @@ function App() {
     produits: "Produits",
     clients: "Clients",
     fournisseurs: "Fournisseurs",
-    "bon-entree": "Bon d'Entree",
-    "bon-sortie": "Bon de Sortie",
+    "bon-entree": "Nouveau Bon d'Entree",
+    "bon-sortie": "Nouveau Bon de Sortie",
+    "liste-entree": "Liste des Bons d'Entree",
+    "liste-sortie": "Liste des Bons de Sortie",
   };
 
   const donneesFiltrees = donnees.filter((d) =>
-    Object.values(d).some((v) =>
-      String(v).toLowerCase().includes(recherche.toLowerCase())
-    )
+    Object.values(d).some((v) => String(v).toLowerCase().includes(recherche.toLowerCase()))
   );
 
-  const renderFormulaire = (type) => (
+  const renderFormAjout = () => {
+    if (page === "produits") return (
+      <div className="card p-3 mb-3">
+        <h5 className="mb-3">Nouveau Produit</h5>
+        <div className="row g-2">
+          <div className="col-md-2"><input className="form-control" placeholder="Code *" value={newProduit.code_produit} onChange={(e) => setNewProduit({ ...newProduit, code_produit: e.target.value })} /></div>
+          <div className="col-md-3"><input className="form-control" placeholder="Designation *" value={newProduit.designation} onChange={(e) => setNewProduit({ ...newProduit, designation: e.target.value })} /></div>
+          <div className="col-md-1"><input className="form-control" placeholder="Unite" value={newProduit.unite} onChange={(e) => setNewProduit({ ...newProduit, unite: e.target.value })} /></div>
+          <div className="col-md-2"><input className="form-control" type="number" placeholder="Prix Achat" value={newProduit.prix_achat} onChange={(e) => setNewProduit({ ...newProduit, prix_achat: e.target.value })} /></div>
+          <div className="col-md-2"><input className="form-control" type="number" placeholder="Prix Vente" value={newProduit.prix_vente} onChange={(e) => setNewProduit({ ...newProduit, prix_vente: e.target.value })} /></div>
+          <div className="col-md-2"><input className="form-control" type="number" placeholder="Stock Min" value={newProduit.stock_minimum} onChange={(e) => setNewProduit({ ...newProduit, stock_minimum: e.target.value })} /></div>
+        </div>
+        <div className="mt-2">
+          <button className="btn btn-success me-2" onClick={ajouterElement}>Enregistrer</button>
+          <button className="btn btn-secondary" onClick={() => setShowForm(false)}>Annuler</button>
+        </div>
+      </div>
+    );
+    if (page === "clients") return (
+      <div className="card p-3 mb-3">
+        <h5 className="mb-3">Nouveau Client</h5>
+        <div className="row g-2">
+          <div className="col-md-2"><input className="form-control" placeholder="Code *" value={newClient.code_client} onChange={(e) => setNewClient({ ...newClient, code_client: e.target.value })} /></div>
+          <div className="col-md-3"><input className="form-control" placeholder="Nom *" value={newClient.nom} onChange={(e) => setNewClient({ ...newClient, nom: e.target.value })} /></div>
+          <div className="col-md-3"><input className="form-control" placeholder="Telephone" value={newClient.telephone} onChange={(e) => setNewClient({ ...newClient, telephone: e.target.value })} /></div>
+          <div className="col-md-4"><input className="form-control" placeholder="Adresse" value={newClient.adresse} onChange={(e) => setNewClient({ ...newClient, adresse: e.target.value })} /></div>
+        </div>
+        <div className="mt-2">
+          <button className="btn btn-success me-2" onClick={ajouterElement}>Enregistrer</button>
+          <button className="btn btn-secondary" onClick={() => setShowForm(false)}>Annuler</button>
+        </div>
+      </div>
+    );
+    if (page === "fournisseurs") return (
+      <div className="card p-3 mb-3">
+        <h5 className="mb-3">Nouveau Fournisseur</h5>
+        <div className="row g-2">
+          <div className="col-md-2"><input className="form-control" placeholder="Code *" value={newFournisseur.code_fournisseur} onChange={(e) => setNewFournisseur({ ...newFournisseur, code_fournisseur: e.target.value })} /></div>
+          <div className="col-md-3"><input className="form-control" placeholder="Nom *" value={newFournisseur.nom} onChange={(e) => setNewFournisseur({ ...newFournisseur, nom: e.target.value })} /></div>
+          <div className="col-md-3"><input className="form-control" placeholder="Telephone" value={newFournisseur.telephone} onChange={(e) => setNewFournisseur({ ...newFournisseur, telephone: e.target.value })} /></div>
+          <div className="col-md-4"><input className="form-control" placeholder="Adresse" value={newFournisseur.adresse} onChange={(e) => setNewFournisseur({ ...newFournisseur, adresse: e.target.value })} /></div>
+        </div>
+        <div className="mt-2">
+          <button className="btn btn-success me-2" onClick={ajouterElement}>Enregistrer</button>
+          <button className="btn btn-secondary" onClick={() => setShowForm(false)}>Annuler</button>
+        </div>
+      </div>
+    );
+  };
+
+  const renderFormulaireBon = (type) => (
     <div className="card p-4">
       <h4 className="mb-4">{type === "bon-entree" ? "Nouveau Bon d'Entree" : "Nouveau Bon de Sortie"}</h4>
-
-      {message && (
-        <div className={`alert ${message.includes("succes") ? "alert-success" : "alert-danger"}`}>
-          {message}
-        </div>
-      )}
-
+      {message && <div className={`alert ${message.includes("succes") ? "alert-success" : "alert-danger"}`}>{message}</div>}
       <div className="row mb-3">
         <div className="col-md-4">
           <label className="form-label">Numero Bon *</label>
-          <input type="text" className="form-control"
-            value={bon.numero_bon}
-            onChange={(e) => setBon({ ...bon, numero_bon: e.target.value })}
-            placeholder={type === "bon-entree" ? "Ex: BE003" : "Ex: BS002"} />
+          <input type="text" className="form-control" value={bon.numero_bon} onChange={(e) => setBon({ ...bon, numero_bon: e.target.value })} placeholder={type === "bon-entree" ? "Ex: BE003" : "Ex: BS003"} />
         </div>
         <div className="col-md-4">
           <label className="form-label">Date *</label>
-          <input type="date" className="form-control"
-            value={bon.date_bon}
-            onChange={(e) => setBon({ ...bon, date_bon: e.target.value })} />
+          <input type="date" className="form-control" value={bon.date_bon} onChange={(e) => setBon({ ...bon, date_bon: e.target.value })} />
         </div>
         <div className="col-md-4">
           {type === "bon-entree" ? (
             <>
               <label className="form-label">Fournisseur *</label>
-              <select className="form-select"
-                value={bon.id_fournisseur}
-                onChange={(e) => setBon({ ...bon, id_fournisseur: e.target.value })}>
+              <select className="form-select" value={bon.id_fournisseur} onChange={(e) => setBon({ ...bon, id_fournisseur: e.target.value })}>
                 <option value="">-- Choisir --</option>
-                {fournisseurs.map((f) => (
-                  <option key={f.id_fournisseur} value={f.id_fournisseur}>{f.nom}</option>
-                ))}
+                {fournisseurs.map((f) => <option key={f.id_fournisseur} value={f.id_fournisseur}>{f.nom}</option>)}
               </select>
             </>
           ) : (
             <>
               <label className="form-label">Client *</label>
-              <select className="form-select"
-                value={bon.id_client}
-                onChange={(e) => setBon({ ...bon, id_client: e.target.value })}>
+              <select className="form-select" value={bon.id_client} onChange={(e) => setBon({ ...bon, id_client: e.target.value })}>
                 <option value="">-- Choisir --</option>
-                {clients.map((c) => (
-                  <option key={c.id_client} value={c.id_client}>{c.nom}</option>
-                ))}
+                {clients.map((c) => <option key={c.id_client} value={c.id_client}>{c.nom}</option>)}
               </select>
             </>
           )}
         </div>
       </div>
-
       <div className="mb-3">
         <label className="form-label">Observation</label>
-        <input type="text" className="form-control"
-          value={bon.observation}
-          onChange={(e) => setBon({ ...bon, observation: e.target.value })} />
+        <input type="text" className="form-control" value={bon.observation} onChange={(e) => setBon({ ...bon, observation: e.target.value })} />
       </div>
-
       <h5 className="mb-3">Produits</h5>
       <table className="table table-bordered">
         <thead className="table-dark">
-          <tr>
-            <th>Produit</th>
-            <th>Quantite</th>
-            <th>Prix Unitaire</th>
-            <th>Montant</th>
-            <th></th>
-          </tr>
+          <tr><th>Produit</th><th>Quantite</th><th>Prix Unitaire</th><th>Montant</th><th></th></tr>
         </thead>
         <tbody>
           {lignes.map((ligne, index) => (
             <tr key={index}>
               <td>
-                <select className="form-select"
-                  value={ligne.id_produit}
-                  onChange={(e) => modifierLigne(index, "id_produit", e.target.value)}>
+                <select className="form-select" value={ligne.id_produit} onChange={(e) => modifierLigne(index, "id_produit", e.target.value)}>
                   <option value="">-- Choisir --</option>
-                  {produits.map((p) => (
-                    <option key={p.id_produit} value={p.id_produit}>{p.designation}</option>
-                  ))}
+                  {produits.map((p) => <option key={p.id_produit} value={p.id_produit}>{p.designation}</option>)}
                 </select>
               </td>
-              <td>
-                <input type="number" className="form-control"
-                  value={ligne.quantite}
-                  onChange={(e) => modifierLigne(index, "quantite", e.target.value)} />
-              </td>
-              <td>
-                <input type="number" className="form-control"
-                  value={ligne.prix_unitaire}
-                  onChange={(e) => modifierLigne(index, "prix_unitaire", e.target.value)} />
-              </td>
-              <td className="text-center align-middle">
-                {(ligne.quantite * ligne.prix_unitaire) || 0} MRU
-              </td>
-              <td className="text-center align-middle">
-                <button className="btn btn-danger btn-sm"
-                  onClick={() => supprimerLigne(index)}>X</button>
-              </td>
+              <td><input type="number" className="form-control" value={ligne.quantite} onChange={(e) => modifierLigne(index, "quantite", e.target.value)} /></td>
+              <td><input type="number" className="form-control" value={ligne.prix_unitaire} onChange={(e) => modifierLigne(index, "prix_unitaire", e.target.value)} /></td>
+              <td className="text-center align-middle">{(ligne.quantite * ligne.prix_unitaire) || 0} MRU</td>
+              <td className="text-center align-middle"><button className="btn btn-danger btn-sm" onClick={() => supprimerLigne(index)}>X</button></td>
             </tr>
           ))}
         </tbody>
       </table>
-
-      <button className="btn btn-secondary mb-3" onClick={ajouterLigne}>
-        + Ajouter une ligne
-      </button>
-
-      <div>
-        <button className="btn btn-success btn-lg" onClick={() => soumettreBon(type)}>
-          Enregistrer le Bon
-        </button>
-      </div>
+      <button className="btn btn-secondary mb-3" onClick={ajouterLigne}>+ Ajouter une ligne</button>
+      <div><button className="btn btn-success btn-lg" onClick={() => soumettreBon(type)}>Enregistrer le Bon</button></div>
     </div>
+  );
+
+  const renderListeBons = (type) => (
+    <>
+      {bonDetail ? (
+        <div className="card p-4">
+          <div className="d-flex justify-content-between align-items-center mb-3">
+            <h5>Detail du Bon : {bonDetail.numero_bon}</h5>
+            <div>
+              <button className="btn btn-danger me-2"
+                onClick={() => supprimerBon(
+                  type === "entree" ? bonDetail.id_bon_entree : bonDetail.id_bon_sortie, type
+                )}>
+                Supprimer ce Bon
+              </button>
+              <button className="btn btn-secondary" onClick={() => setBonDetail(null)}>Retour</button>
+            </div>
+          </div>
+          <div className="row mb-3">
+            <div className="col-md-3"><strong>Numero :</strong> {bonDetail.numero_bon}</div>
+            <div className="col-md-3"><strong>Date :</strong> {bonDetail.date_bon?.substring(0, 10)}</div>
+            <div className="col-md-3"><strong>{type === "entree" ? "Fournisseur" : "Client"} :</strong> {type === "entree" ? bonDetail.nom_fournisseur : bonDetail.nom_client}</div>
+            <div className="col-md-3"><strong>Observation :</strong> {bonDetail.observation}</div>
+          </div>
+          <table className="table table-bordered table-striped">
+            <thead className="table-dark">
+              <tr><th>Code</th><th>Designation</th><th>Quantite</th><th>Prix Unitaire</th><th>Montant</th></tr>
+            </thead>
+            <tbody>
+              {lignesDetail.map((l, i) => (
+                <tr key={i}>
+                  <td>{l.code_produit}</td>
+                  <td>{l.designation}</td>
+                  <td>{l.quantite}</td>
+                  <td>{l.prix_unitaire}</td>
+                  <td>{l.montant} MRU</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <>
+          <div className="d-flex justify-content-between align-items-center mb-3">
+            <h4>{titres[page]}</h4>
+          </div>
+          {message && (
+            <div className={`alert ${message.includes("succes") ? "alert-success" : "alert-danger"} alert-dismissible`}>
+              {message}
+              <button className="btn-close" onClick={() => setMessage("")}></button>
+            </div>
+          )}
+          <input type="text" className="form-control mb-3" placeholder="Rechercher..."
+            value={recherche} onChange={(e) => setRecherche(e.target.value)} />
+          {loading ? (
+            <div className="text-center"><div className="spinner-border text-primary"></div></div>
+          ) : (
+            <table className="table table-bordered table-striped table-hover">
+              <thead className="table-dark">
+                <tr>
+                  {colonnes[page].map((col) => <th key={col}>{col.replace(/_/g, " ").toUpperCase()}</th>)}
+                  <th>ACTIONS</th>
+                </tr>
+              </thead>
+              <tbody>
+                {donneesFiltrees.map((d, i) => (
+                  <tr key={i}>
+                    {colonnes[page].map((col) => <td key={col}>{col.includes("date") ? d[col]?.substring(0, 10) : d[col]}</td>)}
+                    <td className="text-center">
+                      <button className="btn btn-primary btn-sm me-2"
+                        onClick={() => voirDetailBon(d, type)}>
+                        Detail
+                      </button>
+                      <button className="btn btn-danger btn-sm"
+                        onClick={() => supprimerBon(
+                          type === "entree" ? d.id_bon_entree : d.id_bon_sortie, type
+                        )}>
+                        Supprimer
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </>
+      )}
+    </>
   );
 
   return (
@@ -248,92 +438,190 @@ function App() {
       <nav className="navbar navbar-dark bg-primary px-4 mb-4">
         <span className="navbar-brand fw-bold fs-4">Gestion de Stock</span>
       </nav>
-
       <div className="container">
         <div className="row mb-4">
           <div className="col-md-3">
             <div className="card text-white bg-primary mb-3">
-              <div className="card-body text-center">
-                <h2>{stats.produits}</h2>
-                <p className="mb-0">Produits</p>
-              </div>
+              <div className="card-body text-center"><h2>{stats.produits}</h2><p className="mb-0">Produits</p></div>
             </div>
           </div>
           <div className="col-md-3">
             <div className="card text-white bg-success mb-3">
-              <div className="card-body text-center">
-                <h2>{stats.clients}</h2>
-                <p className="mb-0">Clients</p>
-              </div>
+              <div className="card-body text-center"><h2>{stats.clients}</h2><p className="mb-0">Clients</p></div>
             </div>
           </div>
           <div className="col-md-3">
             <div className="card text-white bg-info mb-3">
-              <div className="card-body text-center">
-                <h2>{stats.fournisseurs}</h2>
-                <p className="mb-0">Fournisseurs</p>
-              </div>
+              <div className="card-body text-center"><h2>{stats.fournisseurs}</h2><p className="mb-0">Fournisseurs</p></div>
             </div>
           </div>
           <div className="col-md-3">
             <div className="card text-white bg-danger mb-3">
-              <div className="card-body text-center">
-                <h2>{stats.rupture}</h2>
-                <p className="mb-0">Rupture Stock</p>
-              </div>
+              <div className="card-body text-center"><h2>{stats.rupture}</h2><p className="mb-0">Rupture Stock</p></div>
             </div>
           </div>
         </div>
 
         <div className="mb-4">
           {Object.keys(titres).map((p) => (
-            <button
-              key={p}
-              onClick={() => { setPage(p); resetBon(); }}
-              className={`btn me-2 mb-2 ${page === p ? "btn-primary" : "btn-secondary"}`}
-            >
+            <button key={p} onClick={() => { setPage(p); resetBon(); setBonDetail(null); }}
+              className={`btn me-2 mb-2 ${page === p ? "btn-primary" : "btn-secondary"}`}>
               {titres[p]}
             </button>
           ))}
         </div>
 
-        {page === "bon-entree" || page === "bon-sortie" ? (
-          renderFormulaire(page)
-        ) : (
-          <>
-            <h4 className="mb-3">{titres[page]}</h4>
-            <input type="text" className="form-control mb-3"
-              placeholder="Rechercher..."
-              value={recherche}
-              onChange={(e) => setRecherche(e.target.value)} />
-
-            {loading ? (
-              <div className="text-center">
-                <div className="spinner-border text-primary" role="status"></div>
+        {page === "bon-entree" ? renderFormulaireBon("bon-entree")
+          : page === "bon-sortie" ? renderFormulaireBon("bon-sortie")
+          : page === "liste-entree" ? renderListeBons("entree")
+          : page === "liste-sortie" ? renderListeBons("sortie")
+          : (
+            <>
+              <div className="d-flex justify-content-between align-items-center mb-3">
+                <h4>{titres[page]}</h4>
+                {["produits", "clients", "fournisseurs"].includes(page) && (
+                  <button className="btn btn-success" onClick={() => setShowForm(!showForm)}>
+                    {showForm ? "Annuler" : "+ Ajouter"}
+                  </button>
+                )}
               </div>
-            ) : (
-              <table className="table table-bordered table-striped table-hover">
-                <thead className="table-dark">
-                  <tr>
-                    {colonnes[page] && colonnes[page].map((col) => (
-                      <th key={col}>{col.replace(/_/g, " ").toUpperCase()}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {donneesFiltrees.map((d, i) => (
-                    <tr key={i}>
+
+              {message && (
+                <div className={`alert ${message.includes("succes") ? "alert-success" : "alert-danger"} alert-dismissible`}>
+                  {message}
+                  <button className="btn-close" onClick={() => setMessage("")}></button>
+                </div>
+              )}
+
+              {showForm && renderFormAjout()}
+
+              <input type="text" className="form-control mb-3" placeholder="Rechercher..."
+                value={recherche} onChange={(e) => setRecherche(e.target.value)} />
+
+              {loading ? (
+                <div className="text-center"><div className="spinner-border text-primary"></div></div>
+              ) : (
+                <table className="table table-bordered table-striped table-hover">
+                  <thead className="table-dark">
+                    <tr>
                       {colonnes[page] && colonnes[page].map((col) => (
-                        <td key={col}>{d[col]}</td>
+                        <th key={col}>{col.replace(/_/g, " ").toUpperCase()}</th>
                       ))}
+                      {["produits", "clients", "fournisseurs"].includes(page) && <th>ACTIONS</th>}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </>
-        )}
+                  </thead>
+                  <tbody>
+                    {donneesFiltrees.map((d, i) => (
+                      <tr key={i}>
+                        {colonnes[page] && colonnes[page].map((col) => (
+                          <td key={col}>{d[col]}</td>
+                        ))}
+                        {/* ✏️ BOUTONS MODIFIER + SUPPRIMER */}
+                        {["produits", "clients", "fournisseurs"].includes(page) && (
+                          <td className="text-center">
+                            <button className="btn btn-warning btn-sm me-2"
+                              onClick={() => ouvrirModification(d)}>
+                              ✏️ Modifier
+                            </button>
+                            <button className="btn btn-danger btn-sm"
+                              onClick={() => supprimerElement(d[idCols[page]])}>
+                              🗑️ Supprimer
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </>
+          )}
       </div>
+
+      {/* ✏️ MODAL DE MODIFICATION */}
+      {showEditModal && elementAModifier && (
+        <div className="modal show d-block" style={{ backgroundColor: "rgba(0,0,0,0.5)" }}>
+          <div className="modal-dialog modal-lg">
+            <div className="modal-content">
+              <div className="modal-header bg-warning">
+                <h5 className="modal-title">
+                  ✏️ Modifier {page === "produits" ? "Produit" : page === "clients" ? "Client" : "Fournisseur"}
+                </h5>
+                <button className="btn-close" onClick={() => setShowEditModal(false)}></button>
+              </div>
+              <div className="modal-body">
+                {page === "produits" && (
+                  <div className="row g-3">
+                    <div className="col-md-2">
+                      <label className="form-label">Code</label>
+                      <input className="form-control" value={elementAModifier.code_produit || ""}
+                        onChange={(e) => setElementAModifier({ ...elementAModifier, code_produit: e.target.value })} />
+                    </div>
+                    <div className="col-md-4">
+                      <label className="form-label">Designation</label>
+                      <input className="form-control" value={elementAModifier.designation || ""}
+                        onChange={(e) => setElementAModifier({ ...elementAModifier, designation: e.target.value })} />
+                    </div>
+                    <div className="col-md-2">
+                      <label className="form-label">Unite</label>
+                      <input className="form-control" value={elementAModifier.unite || ""}
+                        onChange={(e) => setElementAModifier({ ...elementAModifier, unite: e.target.value })} />
+                    </div>
+                    <div className="col-md-2">
+                      <label className="form-label">Prix Achat</label>
+                      <input type="number" className="form-control" value={elementAModifier.prix_achat || ""}
+                        onChange={(e) => setElementAModifier({ ...elementAModifier, prix_achat: e.target.value })} />
+                    </div>
+                    <div className="col-md-2">
+                      <label className="form-label">Prix Vente</label>
+                      <input type="number" className="form-control" value={elementAModifier.prix_vente || ""}
+                        onChange={(e) => setElementAModifier({ ...elementAModifier, prix_vente: e.target.value })} />
+                    </div>
+                    <div className="col-md-2">
+                      <label className="form-label">Stock Minimum</label>
+                      <input type="number" className="form-control" value={elementAModifier.stock_minimum || ""}
+                        onChange={(e) => setElementAModifier({ ...elementAModifier, stock_minimum: e.target.value })} />
+                    </div>
+                  </div>
+                )}
+                {(page === "clients" || page === "fournisseurs") && (
+                  <div className="row g-3">
+                    <div className="col-md-3">
+                      <label className="form-label">Code</label>
+                      <input className="form-control"
+                        value={elementAModifier[page === "clients" ? "code_client" : "code_fournisseur"] || ""}
+                        onChange={(e) => setElementAModifier({
+                          ...elementAModifier,
+                          [page === "clients" ? "code_client" : "code_fournisseur"]: e.target.value
+                        })} />
+                    </div>
+                    <div className="col-md-3">
+                      <label className="form-label">Nom</label>
+                      <input className="form-control" value={elementAModifier.nom || ""}
+                        onChange={(e) => setElementAModifier({ ...elementAModifier, nom: e.target.value })} />
+                    </div>
+                    <div className="col-md-3">
+                      <label className="form-label">Telephone</label>
+                      <input className="form-control" value={elementAModifier.telephone || ""}
+                        onChange={(e) => setElementAModifier({ ...elementAModifier, telephone: e.target.value })} />
+                    </div>
+                    <div className="col-md-3">
+                      <label className="form-label">Adresse</label>
+                      <input className="form-control" value={elementAModifier.adresse || ""}
+                        onChange={(e) => setElementAModifier({ ...elementAModifier, adresse: e.target.value })} />
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="modal-footer">
+                <button className="btn btn-secondary" onClick={() => setShowEditModal(false)}>Annuler</button>
+                <button className="btn btn-warning" onClick={enregistrerModification}>💾 Enregistrer</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
