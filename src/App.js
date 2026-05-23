@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import 'bootstrap/dist/css/bootstrap.min.css';
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 function App() {
   const API = "https://gestion-stock-backend-5qm3.onrender.com";
@@ -22,11 +24,11 @@ function App() {
   const [bonDetail, setBonDetail] = useState(null);
   const [lignesDetail, setLignesDetail] = useState([]);
 
-  // ✏️ ETATS MODIFICATION PRODUITS/CLIENTS/FOURNISSEURS
+  // ETATS MODIFICATION PRODUITS/CLIENTS/FOURNISSEURS
   const [showEditModal, setShowEditModal] = useState(false);
   const [elementAModifier, setElementAModifier] = useState(null);
 
-  // ✏️ ETATS MODIFICATION BONS
+  // ETATS MODIFICATION BONS
   const [bonEnEdition, setBonEnEdition] = useState(null);
   const [lignesEdition, setLignesEdition] = useState([]);
   const [showEditBon, setShowEditBon] = useState(false);
@@ -84,7 +86,6 @@ function App() {
     setLignes(newLignes);
   };
 
-  // ✏️ Lignes du bon en edition
   const ajouterLigneEdition = () => setLignesEdition([...lignesEdition, { id_produit: "", quantite: "", prix_unitaire: "" }]);
   const supprimerLigneEdition = (index) => setLignesEdition(lignesEdition.filter((_, i) => i !== index));
   const modifierLigneEdition = (index, champ, valeur) => {
@@ -189,7 +190,6 @@ function App() {
     }
   };
 
-  // ✏️ Ouvrir le formulaire de modification d'un bon
   const ouvrirModificationBon = async (bonData, type) => {
     setBonEnEdition({ ...bonData, _type: type });
     const url = type === "entree"
@@ -205,7 +205,6 @@ function App() {
     setBonDetail(null);
   };
 
-  // ✏️ Enregistrer la modification d'un bon
   const enregistrerModificationBon = async () => {
     const type = bonEnEdition._type;
     const id = type === "entree" ? bonEnEdition.id_bon_entree : bonEnEdition.id_bon_sortie;
@@ -256,6 +255,87 @@ function App() {
       : `${API}/bons-sortie/${bon.id_bon_sortie}/lignes`;
     const lignes = await fetch(url).then((r) => r.json());
     setLignesDetail(lignes);
+  };
+
+  // 🖨️ FONCTION IMPRESSION PDF
+  const imprimerBonPDF = (type) => {
+    const doc = new jsPDF();
+    const estEntree = type === "entree";
+    const titre = estEntree ? "BON D'ENTREE" : "BON DE SORTIE";
+    const couleur = estEntree ? [13, 110, 253] : [25, 135, 84];
+
+    // En-tete de la societe
+    doc.setFillColor(...couleur);
+    doc.rect(0, 0, 210, 30, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(20);
+    doc.setFont("helvetica", "bold");
+    doc.text("GESTION DE STOCK", 105, 13, { align: "center" });
+    doc.setFontSize(13);
+    doc.text(titre, 105, 23, { align: "center" });
+
+    // Informations du bon
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "bold");
+    doc.text("Numero du Bon :", 15, 42);
+    doc.text("Date :", 15, 52);
+    doc.text(estEntree ? "Fournisseur :" : "Client :", 15, 62);
+    doc.text("Observation :", 15, 72);
+
+    doc.setFont("helvetica", "normal");
+    doc.text(bonDetail.numero_bon || "-", 60, 42);
+    doc.text(bonDetail.date_bon?.substring(0, 10) || "-", 60, 52);
+    doc.text(
+      estEntree ? (bonDetail.nom_fournisseur || "-") : (bonDetail.nom_client || "-"),
+      60, 62
+    );
+    doc.text(bonDetail.observation || "-", 60, 72);
+
+    // Ligne separatrice
+    doc.setDrawColor(...couleur);
+    doc.setLineWidth(0.5);
+    doc.line(15, 78, 195, 78);
+
+    // Tableau des lignes
+    const formatMontant = (val) => Number(val).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+    const totalGeneral = lignesDetail.reduce((sum, l) => sum + Number(l.montant || 0), 0);
+
+    autoTable(doc, {
+      startY: 83,
+      head: [["Code", "Designation", "Quantite", "Prix Unitaire", "Montant (MRU)"]],
+      body: lignesDetail.map((l) => [
+        l.code_produit || "-",
+        l.designation || "-",
+        l.quantite,
+        formatMontant(l.prix_unitaire),
+        formatMontant(l.montant),
+      ]),
+      foot: [["", "", "", "TOTAL GENERAL :", formatMontant(totalGeneral) + " MRU"]],
+      headStyles: { fillColor: couleur, textColor: 255, fontStyle: "bold" },
+      footStyles: { fillColor: [240, 240, 240], textColor: 0, fontStyle: "bold" },
+      alternateRowStyles: { fillColor: [249, 249, 249] },
+      styles: { fontSize: 10, cellPadding: 4 },
+      columnStyles: {
+        0: { cellWidth: 25 },
+        1: { cellWidth: 70 },
+        2: { cellWidth: 25, halign: "center" },
+        3: { cellWidth: 35, halign: "right" },
+        4: { cellWidth: 35, halign: "right" },
+      },
+    });
+
+    // Pied de page
+    const pageHeight = doc.internal.pageSize.height;
+    doc.setFontSize(9);
+    doc.setTextColor(150, 150, 150);
+    doc.text(
+      `Document genere le ${new Date().toLocaleDateString("fr-FR")} a ${new Date().toLocaleTimeString("fr-FR")}`,
+      105, pageHeight - 10, { align: "center" }
+    );
+
+    // Telecharger le PDF
+    doc.save(`${titre.replace(" ", "_")}_${bonDetail.numero_bon}.pdf`);
   };
 
   const colonnes = {
@@ -402,7 +482,6 @@ function App() {
     </div>
   );
 
-  // ✏️ FORMULAIRE DE MODIFICATION D'UN BON
   const renderFormulaireModificationBon = () => {
     if (!bonEnEdition) return null;
     const type = bonEnEdition._type;
@@ -488,13 +567,17 @@ function App() {
 
   const renderListeBons = (type) => (
     <>
-      {/* ✏️ MODE EDITION BON */}
       {showEditBon && bonEnEdition && bonEnEdition._type === type ? renderFormulaireModificationBon()
       : bonDetail ? (
         <div className="card p-4">
           <div className="d-flex justify-content-between align-items-center mb-3">
             <h5>Detail du Bon : {bonDetail.numero_bon}</h5>
             <div>
+              {/* 🖨️ BOUTON IMPRIMER PDF */}
+              <button className="btn btn-success me-2"
+                onClick={() => imprimerBonPDF(type)}>
+                🖨️ Imprimer PDF
+              </button>
               <button className="btn btn-warning me-2"
                 onClick={() => ouvrirModificationBon(bonDetail, type)}>
                 ✏️ Modifier
@@ -529,6 +612,12 @@ function App() {
                 </tr>
               ))}
             </tbody>
+            <tfoot className="table-secondary fw-bold">
+              <tr>
+                <td colSpan="4" className="text-end">TOTAL GENERAL :</td>
+                <td>{lignesDetail.reduce((sum, l) => sum + Number(l.montant || 0), 0).toLocaleString("fr-FR")} MRU</td>
+              </tr>
+            </tfoot>
           </table>
         </div>
       ) : (
@@ -688,7 +777,7 @@ function App() {
           )}
       </div>
 
-      {/* ✏️ MODAL MODIFICATION PRODUITS/CLIENTS/FOURNISSEURS */}
+      {/* MODAL MODIFICATION PRODUITS/CLIENTS/FOURNISSEURS */}
       {showEditModal && elementAModifier && (
         <div className="modal show d-block" style={{ backgroundColor: "rgba(0,0,0,0.5)" }}>
           <div className="modal-dialog modal-lg">
