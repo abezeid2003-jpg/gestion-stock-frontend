@@ -2,6 +2,9 @@ import { useState, useEffect } from "react";
 import 'bootstrap/dist/css/bootstrap.min.css';
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
+} from "recharts";
 
 function App() {
   const API = "https://gestion-stock-backend-5qm3.onrender.com";
@@ -33,7 +36,7 @@ function App() {
   const [lignesEdition, setLignesEdition] = useState([]);
   const [showEditBon, setShowEditBon] = useState(false);
 
-  // 🚨 ETATS ALERTES RUPTURE
+  // ETATS ALERTES RUPTURE
   const [stockData, setStockData] = useState([]);
   const [showAlertes, setShowAlertes] = useState(false);
 
@@ -77,7 +80,7 @@ function App() {
       .catch(() => setLoading(false));
   }, [page]);
 
-  // 🚨 CALCUL DES ALERTES
+  // CALCUL DES ALERTES
   const produitsRuptureTotale = stockData.filter((s) => Number(s.stock_actuel) <= 0);
   const produitsStockFaible = stockData.filter((s) =>
     Number(s.stock_actuel) > 0 &&
@@ -85,6 +88,21 @@ function App() {
     Number(s.stock_actuel) <= Number(s.stock_minimum)
   );
   const totalAlertes = produitsRuptureTotale.length + produitsStockFaible.length;
+
+  // 📊 DONNEES GRAPHIQUES
+  const dataStockActuel = stockData.map((s) => ({
+    name: s.code_produit,
+    designation: s.designation,
+    "Stock Actuel": Number(s.stock_actuel),
+    "Stock Minimum": Number(s.stock_minimum) || 0,
+  }));
+
+  const dataEntreesSorties = stockData.map((s) => ({
+    name: s.code_produit,
+    designation: s.designation,
+    "Entrees": Number(s.total_entree),
+    "Sorties": Number(s.total_sortie),
+  }));
 
   const resetBon = () => {
     setBon({ numero_bon: "", date_bon: "", id_fournisseur: "", id_client: "", observation: "" });
@@ -199,9 +217,7 @@ function App() {
       } else {
         setMessage("Erreur lors de la modification !");
       }
-    } catch (err) {
-      setMessage("Erreur de connexion !");
-    }
+    } catch (err) { setMessage("Erreur de connexion !"); }
   };
 
   const ouvrirModificationBon = async (bonData, type) => {
@@ -334,6 +350,57 @@ function App() {
     doc.save(`${titre.replace(" ", "_")}_${bonDetail.numero_bon}.pdf`);
   };
 
+  // 📊 COMPOSANT GRAPHIQUES PAGE DEDIEE
+  const renderGraphiques = () => (
+    <div>
+      <h4 className="mb-4">📊 Graphiques du Stock</h4>
+
+      {/* Graphique 1 — Stock Actuel par produit */}
+      <div className="card mb-4 p-3">
+        <h5 className="mb-3 text-primary">📦 Stock Actuel par Produit</h5>
+        <ResponsiveContainer width="100%" height={350}>
+          <BarChart data={dataStockActuel} margin={{ top: 10, right: 30, left: 0, bottom: 60 }}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="name" angle={-30} textAnchor="end" interval={0} tick={{ fontSize: 12 }} />
+            <YAxis />
+            <Tooltip
+              formatter={(value, name) => [value, name]}
+              labelFormatter={(label) => {
+                const item = dataStockActuel.find((d) => d.name === label);
+                return item ? item.designation : label;
+              }}
+            />
+            <Legend verticalAlign="top" />
+            <Bar dataKey="Stock Actuel" fill="#0d6efd" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="Stock Minimum" fill="#ffc107" radius={[4, 4, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* Graphique 2 — Entrees vs Sorties */}
+      <div className="card mb-4 p-3">
+        <h5 className="mb-3 text-success">📈 Entrees vs Sorties par Produit</h5>
+        <ResponsiveContainer width="100%" height={350}>
+          <BarChart data={dataEntreesSorties} margin={{ top: 10, right: 30, left: 0, bottom: 60 }}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="name" angle={-30} textAnchor="end" interval={0} tick={{ fontSize: 12 }} />
+            <YAxis />
+            <Tooltip
+              formatter={(value, name) => [value, name]}
+              labelFormatter={(label) => {
+                const item = dataEntreesSorties.find((d) => d.name === label);
+                return item ? item.designation : label;
+              }}
+            />
+            <Legend verticalAlign="top" />
+            <Bar dataKey="Entrees" fill="#198754" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="Sorties" fill="#dc3545" radius={[4, 4, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+
   const colonnes = {
     stock: ["code_produit", "designation", "unite", "total_entree", "total_sortie", "stock_actuel"],
     produits: ["code_produit", "designation", "unite", "prix_achat", "prix_vente", "stock_minimum"],
@@ -358,6 +425,7 @@ function App() {
     "bon-sortie": "Nouveau Bon de Sortie",
     "liste-entree": "Liste des Bons d'Entree",
     "liste-sortie": "Liste des Bons de Sortie",
+    "graphiques": "Graphiques",
   };
 
   const donneesFiltrees = donnees.filter((d) =>
@@ -655,10 +723,10 @@ function App() {
   return (
     <div>
       <nav className="navbar navbar-dark bg-primary px-4 mb-4">
-        <span className="navbar-brand fw-bold fs-4">Gestion de Stock</span>
+        <span className="navbar-brand fw-bold fs-4">📦 Gestion de Stock</span>
       </nav>
 
-      {/* 🚨 BANDEAU ALERTE EN HAUT */}
+      {/* BANDEAU ALERTE EN HAUT */}
       {totalAlertes > 0 && (
         <div
           className="alert alert-danger mx-3 mb-0 d-flex justify-content-between align-items-center"
@@ -678,7 +746,7 @@ function App() {
         </div>
       )}
 
-      {/* 🚨 DETAIL DES ALERTES (bandeau expandable) */}
+      {/* DETAIL DES ALERTES */}
       {showAlertes && totalAlertes > 0 && (
         <div className="mx-3 border border-danger border-top-0 p-3 bg-light mb-2">
           {produitsRuptureTotale.length > 0 && (
@@ -691,10 +759,8 @@ function App() {
                 <tbody>
                   {produitsRuptureTotale.map((s, i) => (
                     <tr key={i}>
-                      <td>{s.code_produit}</td>
-                      <td>{s.designation}</td>
-                      <td>{s.unite}</td>
-                      <td className="text-danger fw-bold">{s.stock_actuel}</td>
+                      <td>{s.code_produit}</td><td>{s.designation}</td>
+                      <td>{s.unite}</td><td className="text-danger fw-bold">{s.stock_actuel}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -711,11 +777,8 @@ function App() {
                 <tbody>
                   {produitsStockFaible.map((s, i) => (
                     <tr key={i}>
-                      <td>{s.code_produit}</td>
-                      <td>{s.designation}</td>
-                      <td>{s.unite}</td>
-                      <td className="text-warning fw-bold">{s.stock_actuel}</td>
-                      <td>{s.stock_minimum}</td>
+                      <td>{s.code_produit}</td><td>{s.designation}</td><td>{s.unite}</td>
+                      <td className="text-warning fw-bold">{s.stock_actuel}</td><td>{s.stock_minimum}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -750,7 +813,7 @@ function App() {
           </div>
         </div>
 
-        {/* 🚨 CARTE ALERTES TABLEAU DE BORD */}
+        {/* CARTE ALERTES TABLEAU DE BORD */}
         {totalAlertes > 0 && (
           <div className="card border-danger mb-4">
             <div className="card-header bg-danger text-white fw-bold">
@@ -764,8 +827,7 @@ function App() {
                 <tbody>
                   {produitsRuptureTotale.map((s, i) => (
                     <tr key={"r" + i} className="table-danger">
-                      <td>{s.code_produit}</td>
-                      <td>{s.designation}</td>
+                      <td>{s.code_produit}</td><td>{s.designation}</td>
                       <td className="fw-bold text-danger">{s.stock_actuel}</td>
                       <td>{s.stock_minimum || "-"}</td>
                       <td><span className="badge bg-danger">🔴 Rupture Totale</span></td>
@@ -773,8 +835,7 @@ function App() {
                   ))}
                   {produitsStockFaible.map((s, i) => (
                     <tr key={"f" + i} className="table-warning">
-                      <td>{s.code_produit}</td>
-                      <td>{s.designation}</td>
+                      <td>{s.code_produit}</td><td>{s.designation}</td>
                       <td className="fw-bold text-warning">{s.stock_actuel}</td>
                       <td>{s.stock_minimum}</td>
                       <td><span className="badge bg-warning text-dark">🟠 Stock Faible</span></td>
@@ -786,16 +847,42 @@ function App() {
           </div>
         )}
 
+        {/* 📊 MINI GRAPHIQUE STOCK SUR TABLEAU DE BORD */}
+        {stockData.length > 0 && (
+          <div className="card mb-4 p-3">
+            <h5 className="mb-3 text-primary">📊 Apercu Stock Actuel</h5>
+            <ResponsiveContainer width="100%" height={250}>
+              <BarChart data={dataStockActuel} margin={{ top: 5, right: 20, left: 0, bottom: 50 }}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="name" angle={-30} textAnchor="end" interval={0} tick={{ fontSize: 11 }} />
+                <YAxis />
+                <Tooltip
+                  labelFormatter={(label) => {
+                    const item = dataStockActuel.find((d) => d.name === label);
+                    return item ? item.designation : label;
+                  }}
+                />
+                <Legend verticalAlign="top" />
+                <Bar dataKey="Stock Actuel" fill="#0d6efd" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="Stock Minimum" fill="#ffc107" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+
+        {/* BOUTONS DE NAVIGATION */}
         <div className="mb-4">
           {Object.keys(titres).map((p) => (
             <button key={p} onClick={() => { setPage(p); resetBon(); setBonDetail(null); setShowEditBon(false); }}
               className={`btn me-2 mb-2 ${page === p ? "btn-primary" : "btn-secondary"}`}>
-              {titres[p]}
+              {p === "graphiques" ? "📊 " : ""}{titres[p]}
             </button>
           ))}
         </div>
 
-        {page === "bon-entree" ? renderFormulaireBon("bon-entree")
+        {/* CONTENU SELON PAGE */}
+        {page === "graphiques" ? renderGraphiques()
+          : page === "bon-entree" ? renderFormulaireBon("bon-entree")
           : page === "bon-sortie" ? renderFormulaireBon("bon-sortie")
           : page === "liste-entree" ? renderListeBons("entree")
           : page === "liste-sortie" ? renderListeBons("sortie")
