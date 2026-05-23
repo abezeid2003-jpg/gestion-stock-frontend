@@ -22,9 +22,14 @@ function App() {
   const [bonDetail, setBonDetail] = useState(null);
   const [lignesDetail, setLignesDetail] = useState([]);
 
-  // ✏️ NOUVEAUX ETATS POUR MODIFICATION
+  // ✏️ ETATS MODIFICATION PRODUITS/CLIENTS/FOURNISSEURS
   const [showEditModal, setShowEditModal] = useState(false);
   const [elementAModifier, setElementAModifier] = useState(null);
+
+  // ✏️ ETATS MODIFICATION BONS
+  const [bonEnEdition, setBonEnEdition] = useState(null);
+  const [lignesEdition, setLignesEdition] = useState([]);
+  const [showEditBon, setShowEditBon] = useState(false);
 
   const chargerStats = () => {
     Promise.all([
@@ -55,6 +60,7 @@ function App() {
     setShowForm(false);
     setMessage("");
     setBonDetail(null);
+    setShowEditBon(false);
     const url = page === "liste-entree" ? `${API}/bons-entree`
       : page === "liste-sortie" ? `${API}/bons-sortie`
       : `${API}/${page}`;
@@ -76,6 +82,15 @@ function App() {
     const newLignes = [...lignes];
     newLignes[index][champ] = valeur;
     setLignes(newLignes);
+  };
+
+  // ✏️ Lignes du bon en edition
+  const ajouterLigneEdition = () => setLignesEdition([...lignesEdition, { id_produit: "", quantite: "", prix_unitaire: "" }]);
+  const supprimerLigneEdition = (index) => setLignesEdition(lignesEdition.filter((_, i) => i !== index));
+  const modifierLigneEdition = (index, champ, valeur) => {
+    const newLignes = [...lignesEdition];
+    newLignes[index][champ] = valeur;
+    setLignesEdition(newLignes);
   };
 
   const soumettreBon = async (type) => {
@@ -143,13 +158,11 @@ function App() {
     } catch (err) { setMessage("Erreur de connexion !"); }
   };
 
-  // ✏️ NOUVELLE FONCTION — Ouvrir le modal de modification
   const ouvrirModification = (element) => {
     setElementAModifier({ ...element });
     setShowEditModal(true);
   };
 
-  // ✏️ NOUVELLE FONCTION — Enregistrer la modification
   const enregistrerModification = async () => {
     let url = "";
     if (page === "produits") url = `${API}/produits/${elementAModifier.id_produit}`;
@@ -174,6 +187,50 @@ function App() {
     } catch (err) {
       setMessage("Erreur de connexion !");
     }
+  };
+
+  // ✏️ Ouvrir le formulaire de modification d'un bon
+  const ouvrirModificationBon = async (bonData, type) => {
+    setBonEnEdition({ ...bonData, _type: type });
+    const url = type === "entree"
+      ? `${API}/bons-entree/${bonData.id_bon_entree}/lignes`
+      : `${API}/bons-sortie/${bonData.id_bon_sortie}/lignes`;
+    const lignesData = await fetch(url).then((r) => r.json());
+    setLignesEdition(lignesData.map((l) => ({
+      id_produit: l.id_produit,
+      quantite: l.quantite,
+      prix_unitaire: l.prix_unitaire,
+    })));
+    setShowEditBon(true);
+    setBonDetail(null);
+  };
+
+  // ✏️ Enregistrer la modification d'un bon
+  const enregistrerModificationBon = async () => {
+    const type = bonEnEdition._type;
+    const id = type === "entree" ? bonEnEdition.id_bon_entree : bonEnEdition.id_bon_sortie;
+    const url = type === "entree" ? `${API}/bons-entree/${id}` : `${API}/bons-sortie/${id}`;
+    const body = type === "entree"
+      ? { numero_bon: bonEnEdition.numero_bon, date_bon: bonEnEdition.date_bon, id_fournisseur: bonEnEdition.id_fournisseur, observation: bonEnEdition.observation, lignes: lignesEdition }
+      : { numero_bon: bonEnEdition.numero_bon, date_bon: bonEnEdition.date_bon, id_client: bonEnEdition.id_client, observation: bonEnEdition.observation, lignes: lignesEdition };
+    try {
+      const response = await fetch(url, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await response.json();
+      if (data.success) {
+        setMessage("Bon modifie avec succes !");
+        setShowEditBon(false);
+        setBonEnEdition(null);
+        const listeUrl = type === "entree" ? `${API}/bons-entree` : `${API}/bons-sortie`;
+        fetch(listeUrl).then((r) => r.json()).then(setDonnees);
+        chargerStats();
+      } else {
+        setMessage("Erreur : " + data.error);
+      }
+    } catch (err) { setMessage("Erreur de connexion !"); }
   };
 
   const supprimerBon = async (id, type) => {
@@ -345,18 +402,108 @@ function App() {
     </div>
   );
 
+  // ✏️ FORMULAIRE DE MODIFICATION D'UN BON
+  const renderFormulaireModificationBon = () => {
+    if (!bonEnEdition) return null;
+    const type = bonEnEdition._type;
+    return (
+      <div className="card p-4 border-warning">
+        <div className="d-flex justify-content-between align-items-center mb-4">
+          <h4 className="text-warning">✏️ Modifier le Bon : {bonEnEdition.numero_bon}</h4>
+          <button className="btn btn-secondary" onClick={() => { setShowEditBon(false); setBonEnEdition(null); }}>Annuler</button>
+        </div>
+        {message && <div className={`alert ${message.includes("succes") ? "alert-success" : "alert-danger"}`}>{message}</div>}
+        <div className="row mb-3">
+          <div className="col-md-4">
+            <label className="form-label">Numero Bon *</label>
+            <input type="text" className="form-control" value={bonEnEdition.numero_bon}
+              onChange={(e) => setBonEnEdition({ ...bonEnEdition, numero_bon: e.target.value })} />
+          </div>
+          <div className="col-md-4">
+            <label className="form-label">Date *</label>
+            <input type="date" className="form-control" value={bonEnEdition.date_bon?.substring(0, 10)}
+              onChange={(e) => setBonEnEdition({ ...bonEnEdition, date_bon: e.target.value })} />
+          </div>
+          <div className="col-md-4">
+            {type === "entree" ? (
+              <>
+                <label className="form-label">Fournisseur *</label>
+                <select className="form-select" value={bonEnEdition.id_fournisseur}
+                  onChange={(e) => setBonEnEdition({ ...bonEnEdition, id_fournisseur: e.target.value })}>
+                  <option value="">-- Choisir --</option>
+                  {fournisseurs.map((f) => <option key={f.id_fournisseur} value={f.id_fournisseur}>{f.nom}</option>)}
+                </select>
+              </>
+            ) : (
+              <>
+                <label className="form-label">Client *</label>
+                <select className="form-select" value={bonEnEdition.id_client}
+                  onChange={(e) => setBonEnEdition({ ...bonEnEdition, id_client: e.target.value })}>
+                  <option value="">-- Choisir --</option>
+                  {clients.map((c) => <option key={c.id_client} value={c.id_client}>{c.nom}</option>)}
+                </select>
+              </>
+            )}
+          </div>
+        </div>
+        <div className="mb-3">
+          <label className="form-label">Observation</label>
+          <input type="text" className="form-control" value={bonEnEdition.observation || ""}
+            onChange={(e) => setBonEnEdition({ ...bonEnEdition, observation: e.target.value })} />
+        </div>
+        <h5 className="mb-3">Produits</h5>
+        <table className="table table-bordered">
+          <thead className="table-warning">
+            <tr><th>Produit</th><th>Quantite</th><th>Prix Unitaire</th><th>Montant</th><th></th></tr>
+          </thead>
+          <tbody>
+            {lignesEdition.map((ligne, index) => (
+              <tr key={index}>
+                <td>
+                  <select className="form-select" value={ligne.id_produit}
+                    onChange={(e) => modifierLigneEdition(index, "id_produit", e.target.value)}>
+                    <option value="">-- Choisir --</option>
+                    {produits.map((p) => <option key={p.id_produit} value={p.id_produit}>{p.designation}</option>)}
+                  </select>
+                </td>
+                <td><input type="number" className="form-control" value={ligne.quantite}
+                  onChange={(e) => modifierLigneEdition(index, "quantite", e.target.value)} /></td>
+                <td><input type="number" className="form-control" value={ligne.prix_unitaire}
+                  onChange={(e) => modifierLigneEdition(index, "prix_unitaire", e.target.value)} /></td>
+                <td className="text-center align-middle">{(ligne.quantite * ligne.prix_unitaire) || 0} MRU</td>
+                <td className="text-center align-middle">
+                  <button className="btn btn-danger btn-sm" onClick={() => supprimerLigneEdition(index)}>X</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <button className="btn btn-secondary mb-3" onClick={ajouterLigneEdition}>+ Ajouter une ligne</button>
+        <div>
+          <button className="btn btn-warning btn-lg" onClick={enregistrerModificationBon}>💾 Enregistrer les modifications</button>
+        </div>
+      </div>
+    );
+  };
+
   const renderListeBons = (type) => (
     <>
-      {bonDetail ? (
+      {/* ✏️ MODE EDITION BON */}
+      {showEditBon && bonEnEdition && bonEnEdition._type === type ? renderFormulaireModificationBon()
+      : bonDetail ? (
         <div className="card p-4">
           <div className="d-flex justify-content-between align-items-center mb-3">
             <h5>Detail du Bon : {bonDetail.numero_bon}</h5>
             <div>
+              <button className="btn btn-warning me-2"
+                onClick={() => ouvrirModificationBon(bonDetail, type)}>
+                ✏️ Modifier
+              </button>
               <button className="btn btn-danger me-2"
                 onClick={() => supprimerBon(
                   type === "entree" ? bonDetail.id_bon_entree : bonDetail.id_bon_sortie, type
                 )}>
-                Supprimer ce Bon
+                🗑️ Supprimer
               </button>
               <button className="btn btn-secondary" onClick={() => setBonDetail(null)}>Retour</button>
             </div>
@@ -416,11 +563,15 @@ function App() {
                         onClick={() => voirDetailBon(d, type)}>
                         Detail
                       </button>
+                      <button className="btn btn-warning btn-sm me-2"
+                        onClick={() => ouvrirModificationBon(d, type)}>
+                        ✏️ Modifier
+                      </button>
                       <button className="btn btn-danger btn-sm"
                         onClick={() => supprimerBon(
                           type === "entree" ? d.id_bon_entree : d.id_bon_sortie, type
                         )}>
-                        Supprimer
+                        🗑️ Supprimer
                       </button>
                     </td>
                   </tr>
@@ -464,7 +615,7 @@ function App() {
 
         <div className="mb-4">
           {Object.keys(titres).map((p) => (
-            <button key={p} onClick={() => { setPage(p); resetBon(); setBonDetail(null); }}
+            <button key={p} onClick={() => { setPage(p); resetBon(); setBonDetail(null); setShowEditBon(false); }}
               className={`btn me-2 mb-2 ${page === p ? "btn-primary" : "btn-secondary"}`}>
               {titres[p]}
             </button>
@@ -516,7 +667,6 @@ function App() {
                         {colonnes[page] && colonnes[page].map((col) => (
                           <td key={col}>{d[col]}</td>
                         ))}
-                        {/* ✏️ BOUTONS MODIFIER + SUPPRIMER */}
                         {["produits", "clients", "fournisseurs"].includes(page) && (
                           <td className="text-center">
                             <button className="btn btn-warning btn-sm me-2"
@@ -538,7 +688,7 @@ function App() {
           )}
       </div>
 
-      {/* ✏️ MODAL DE MODIFICATION */}
+      {/* ✏️ MODAL MODIFICATION PRODUITS/CLIENTS/FOURNISSEURS */}
       {showEditModal && elementAModifier && (
         <div className="modal show d-block" style={{ backgroundColor: "rgba(0,0,0,0.5)" }}>
           <div className="modal-dialog modal-lg">
