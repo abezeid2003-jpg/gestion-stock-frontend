@@ -33,6 +33,10 @@ function App() {
   const [lignesEdition, setLignesEdition] = useState([]);
   const [showEditBon, setShowEditBon] = useState(false);
 
+  // 🚨 ETATS ALERTES RUPTURE
+  const [stockData, setStockData] = useState([]);
+  const [showAlertes, setShowAlertes] = useState(false);
+
   const chargerStats = () => {
     Promise.all([
       fetch(`${API}/produits`).then((r) => r.json()),
@@ -49,6 +53,7 @@ function App() {
       setFournisseurs(fournisseurs);
       setClients(clients);
       setProduits(produits);
+      setStockData(stock);
     });
   };
 
@@ -71,6 +76,15 @@ function App() {
       .then((data) => { setDonnees(data); setLoading(false); })
       .catch(() => setLoading(false));
   }, [page]);
+
+  // 🚨 CALCUL DES ALERTES
+  const produitsRuptureTotale = stockData.filter((s) => Number(s.stock_actuel) <= 0);
+  const produitsStockFaible = stockData.filter((s) =>
+    Number(s.stock_actuel) > 0 &&
+    s.stock_minimum !== null &&
+    Number(s.stock_actuel) <= Number(s.stock_minimum)
+  );
+  const totalAlertes = produitsRuptureTotale.length + produitsStockFaible.length;
 
   const resetBon = () => {
     setBon({ numero_bon: "", date_bon: "", id_fournisseur: "", id_client: "", observation: "" });
@@ -257,14 +271,11 @@ function App() {
     setLignesDetail(lignes);
   };
 
-  // 🖨️ FONCTION IMPRESSION PDF
   const imprimerBonPDF = (type) => {
     const doc = new jsPDF();
     const estEntree = type === "entree";
     const titre = estEntree ? "BON D'ENTREE" : "BON DE SORTIE";
     const couleur = estEntree ? [13, 110, 253] : [25, 135, 84];
-
-    // En-tete de la societe
     doc.setFillColor(...couleur);
     doc.rect(0, 0, 210, 30, "F");
     doc.setTextColor(255, 255, 255);
@@ -273,8 +284,6 @@ function App() {
     doc.text("GESTION DE STOCK", 105, 13, { align: "center" });
     doc.setFontSize(13);
     doc.text(titre, 105, 23, { align: "center" });
-
-    // Informations du bon
     doc.setTextColor(0, 0, 0);
     doc.setFontSize(11);
     doc.setFont("helvetica", "bold");
@@ -282,25 +291,16 @@ function App() {
     doc.text("Date :", 15, 52);
     doc.text(estEntree ? "Fournisseur :" : "Client :", 15, 62);
     doc.text("Observation :", 15, 72);
-
     doc.setFont("helvetica", "normal");
     doc.text(bonDetail.numero_bon || "-", 60, 42);
     doc.text(bonDetail.date_bon?.substring(0, 10) || "-", 60, 52);
-    doc.text(
-      estEntree ? (bonDetail.nom_fournisseur || "-") : (bonDetail.nom_client || "-"),
-      60, 62
-    );
+    doc.text(estEntree ? (bonDetail.nom_fournisseur || "-") : (bonDetail.nom_client || "-"), 60, 62);
     doc.text(bonDetail.observation || "-", 60, 72);
-
-    // Ligne separatrice
     doc.setDrawColor(...couleur);
     doc.setLineWidth(0.5);
     doc.line(15, 78, 195, 78);
-
-    // Tableau des lignes
     const formatMontant = (val) => Number(val).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
     const totalGeneral = lignesDetail.reduce((sum, l) => sum + Number(l.montant || 0), 0);
-
     autoTable(doc, {
       startY: 83,
       head: [["Code", "Designation", "Quantite", "Prix Unitaire", "Montant (MRU)"]],
@@ -324,8 +324,6 @@ function App() {
         4: { cellWidth: 35, halign: "right" },
       },
     });
-
-    // Pied de page
     const pageHeight = doc.internal.pageSize.height;
     doc.setFontSize(9);
     doc.setTextColor(150, 150, 150);
@@ -333,8 +331,6 @@ function App() {
       `Document genere le ${new Date().toLocaleDateString("fr-FR")} a ${new Date().toLocaleTimeString("fr-FR")}`,
       105, pageHeight - 10, { align: "center" }
     );
-
-    // Telecharger le PDF
     doc.save(`${titre.replace(" ", "_")}_${bonDetail.numero_bon}.pdf`);
   };
 
@@ -573,19 +569,10 @@ function App() {
           <div className="d-flex justify-content-between align-items-center mb-3">
             <h5>Detail du Bon : {bonDetail.numero_bon}</h5>
             <div>
-              {/* 🖨️ BOUTON IMPRIMER PDF */}
-              <button className="btn btn-success me-2"
-                onClick={() => imprimerBonPDF(type)}>
-                🖨️ Imprimer PDF
-              </button>
-              <button className="btn btn-warning me-2"
-                onClick={() => ouvrirModificationBon(bonDetail, type)}>
-                ✏️ Modifier
-              </button>
+              <button className="btn btn-success me-2" onClick={() => imprimerBonPDF(type)}>🖨️ Imprimer PDF</button>
+              <button className="btn btn-warning me-2" onClick={() => ouvrirModificationBon(bonDetail, type)}>✏️ Modifier</button>
               <button className="btn btn-danger me-2"
-                onClick={() => supprimerBon(
-                  type === "entree" ? bonDetail.id_bon_entree : bonDetail.id_bon_sortie, type
-                )}>
+                onClick={() => supprimerBon(type === "entree" ? bonDetail.id_bon_entree : bonDetail.id_bon_sortie, type)}>
                 🗑️ Supprimer
               </button>
               <button className="btn btn-secondary" onClick={() => setBonDetail(null)}>Retour</button>
@@ -648,18 +635,10 @@ function App() {
                   <tr key={i}>
                     {colonnes[page].map((col) => <td key={col}>{col.includes("date") ? d[col]?.substring(0, 10) : d[col]}</td>)}
                     <td className="text-center">
-                      <button className="btn btn-primary btn-sm me-2"
-                        onClick={() => voirDetailBon(d, type)}>
-                        Detail
-                      </button>
-                      <button className="btn btn-warning btn-sm me-2"
-                        onClick={() => ouvrirModificationBon(d, type)}>
-                        ✏️ Modifier
-                      </button>
+                      <button className="btn btn-primary btn-sm me-2" onClick={() => voirDetailBon(d, type)}>Detail</button>
+                      <button className="btn btn-warning btn-sm me-2" onClick={() => ouvrirModificationBon(d, type)}>✏️ Modifier</button>
                       <button className="btn btn-danger btn-sm"
-                        onClick={() => supprimerBon(
-                          type === "entree" ? d.id_bon_entree : d.id_bon_sortie, type
-                        )}>
+                        onClick={() => supprimerBon(type === "entree" ? d.id_bon_entree : d.id_bon_sortie, type)}>
                         🗑️ Supprimer
                       </button>
                     </td>
@@ -678,7 +657,76 @@ function App() {
       <nav className="navbar navbar-dark bg-primary px-4 mb-4">
         <span className="navbar-brand fw-bold fs-4">Gestion de Stock</span>
       </nav>
-      <div className="container">
+
+      {/* 🚨 BANDEAU ALERTE EN HAUT */}
+      {totalAlertes > 0 && (
+        <div
+          className="alert alert-danger mx-3 mb-0 d-flex justify-content-between align-items-center"
+          style={{ borderRadius: 0, cursor: "pointer" }}
+          onClick={() => setShowAlertes(!showAlertes)}
+        >
+          <span>
+            🚨 <strong>{totalAlertes} alerte(s) de stock :</strong>
+            {produitsRuptureTotale.length > 0 && (
+              <span className="badge bg-danger ms-2">{produitsRuptureTotale.length} rupture(s) totale(s)</span>
+            )}
+            {produitsStockFaible.length > 0 && (
+              <span className="badge bg-warning text-dark ms-2">{produitsStockFaible.length} stock(s) faible(s)</span>
+            )}
+          </span>
+          <span>{showAlertes ? "▲ Masquer" : "▼ Voir details"}</span>
+        </div>
+      )}
+
+      {/* 🚨 DETAIL DES ALERTES (bandeau expandable) */}
+      {showAlertes && totalAlertes > 0 && (
+        <div className="mx-3 border border-danger border-top-0 p-3 bg-light mb-2">
+          {produitsRuptureTotale.length > 0 && (
+            <>
+              <h6 className="text-danger">🔴 Rupture Totale (Stock = 0)</h6>
+              <table className="table table-sm table-bordered mb-3">
+                <thead className="table-danger">
+                  <tr><th>Code</th><th>Designation</th><th>Unite</th><th>Stock Actuel</th></tr>
+                </thead>
+                <tbody>
+                  {produitsRuptureTotale.map((s, i) => (
+                    <tr key={i}>
+                      <td>{s.code_produit}</td>
+                      <td>{s.designation}</td>
+                      <td>{s.unite}</td>
+                      <td className="text-danger fw-bold">{s.stock_actuel}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          )}
+          {produitsStockFaible.length > 0 && (
+            <>
+              <h6 className="text-warning">🟠 Stock Faible (Stock &lt;= Minimum)</h6>
+              <table className="table table-sm table-bordered">
+                <thead className="table-warning">
+                  <tr><th>Code</th><th>Designation</th><th>Unite</th><th>Stock Actuel</th><th>Stock Minimum</th></tr>
+                </thead>
+                <tbody>
+                  {produitsStockFaible.map((s, i) => (
+                    <tr key={i}>
+                      <td>{s.code_produit}</td>
+                      <td>{s.designation}</td>
+                      <td>{s.unite}</td>
+                      <td className="text-warning fw-bold">{s.stock_actuel}</td>
+                      <td>{s.stock_minimum}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          )}
+        </div>
+      )}
+
+      <div className="container mt-3">
+        {/* CARTES STATISTIQUES */}
         <div className="row mb-4">
           <div className="col-md-3">
             <div className="card text-white bg-primary mb-3">
@@ -701,6 +749,42 @@ function App() {
             </div>
           </div>
         </div>
+
+        {/* 🚨 CARTE ALERTES TABLEAU DE BORD */}
+        {totalAlertes > 0 && (
+          <div className="card border-danger mb-4">
+            <div className="card-header bg-danger text-white fw-bold">
+              🚨 Alertes Stock — {totalAlertes} produit(s) necessitent votre attention
+            </div>
+            <div className="card-body p-0">
+              <table className="table table-sm table-bordered mb-0">
+                <thead className="table-dark">
+                  <tr><th>Code</th><th>Designation</th><th>Stock Actuel</th><th>Stock Minimum</th><th>Statut</th></tr>
+                </thead>
+                <tbody>
+                  {produitsRuptureTotale.map((s, i) => (
+                    <tr key={"r" + i} className="table-danger">
+                      <td>{s.code_produit}</td>
+                      <td>{s.designation}</td>
+                      <td className="fw-bold text-danger">{s.stock_actuel}</td>
+                      <td>{s.stock_minimum || "-"}</td>
+                      <td><span className="badge bg-danger">🔴 Rupture Totale</span></td>
+                    </tr>
+                  ))}
+                  {produitsStockFaible.map((s, i) => (
+                    <tr key={"f" + i} className="table-warning">
+                      <td>{s.code_produit}</td>
+                      <td>{s.designation}</td>
+                      <td className="fw-bold text-warning">{s.stock_actuel}</td>
+                      <td>{s.stock_minimum}</td>
+                      <td><span className="badge bg-warning text-dark">🟠 Stock Faible</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         <div className="mb-4">
           {Object.keys(titres).map((p) => (
@@ -758,14 +842,8 @@ function App() {
                         ))}
                         {["produits", "clients", "fournisseurs"].includes(page) && (
                           <td className="text-center">
-                            <button className="btn btn-warning btn-sm me-2"
-                              onClick={() => ouvrirModification(d)}>
-                              ✏️ Modifier
-                            </button>
-                            <button className="btn btn-danger btn-sm"
-                              onClick={() => supprimerElement(d[idCols[page]])}>
-                              🗑️ Supprimer
-                            </button>
+                            <button className="btn btn-warning btn-sm me-2" onClick={() => ouvrirModification(d)}>✏️ Modifier</button>
+                            <button className="btn btn-danger btn-sm" onClick={() => supprimerElement(d[idCols[page]])}>🗑️ Supprimer</button>
                           </td>
                         )}
                       </tr>
