@@ -239,6 +239,13 @@ function App() {
     setLoadingMouvements(false);
   };
 
+  // Formater date en français jj/mm/aaaa
+  const formatDateFR = (dateStr) => {
+    if (!dateStr) return "-";
+    const [y, m, d] = dateStr.split("-");
+    return `${d}/${m}/${y}`;
+  };
+
   // 📊 CHARGER FICHE DE STOCK
   const chargerFicheStock = async () => {
     let dateDebut, dateFin;
@@ -278,9 +285,9 @@ function App() {
     doc.setFontSize(11);
     doc.setFont("helvetica", "bold");
     if (ficheStockData.dateDebut === ficheStockData.dateFin) {
-      doc.text(`Date : ${ficheStockData.dateDebut}`, 15, 42);
+      doc.text(`Date : ${formatDateFR(ficheStockData.dateDebut)}`, 15, 42);
     } else {
-      doc.text(`Periode : du ${ficheStockData.dateDebut} au ${ficheStockData.dateFin}`, 15, 42);
+      doc.text(`Periode : du ${formatDateFR(ficheStockData.dateDebut)} au ${formatDateFR(ficheStockData.dateFin)}`, 15, 42);
     }
 
     doc.setDrawColor(...couleur);
@@ -443,8 +450,8 @@ function App() {
           <div className="d-flex justify-content-between align-items-center mb-3">
             <h5 className="text-primary">
               {ficheStockData.dateDebut === ficheStockData.dateFin
-                ? `📅 Stock au ${ficheStockData.dateDebut}`
-                : `📅 Stock du ${ficheStockData.dateDebut} au ${ficheStockData.dateFin}`}
+                ? `📅 Stock au ${formatDateFR(ficheStockData.dateDebut)}`
+                : `📅 Stock du ${formatDateFR(ficheStockData.dateDebut)} au ${formatDateFR(ficheStockData.dateFin)}`}
             </h5>
             <button className="btn btn-success" onClick={imprimerFicheStockPDF}>
               🖨️ Imprimer PDF
@@ -478,15 +485,7 @@ function App() {
                 </tr>
               ))}
             </tbody>
-            <tfoot className="table-dark fw-bold">
-              <tr>
-                <td colSpan="3" className="text-end">TOTAUX :</td>
-                <td className="text-center">{ficheStockData.lignes.reduce((s, l) => s + Number(l.stock_initial), 0).toFixed(2)}</td>
-                <td className="text-center text-success">+{ficheStockData.lignes.reduce((s, l) => s + Number(l.total_entrees), 0).toFixed(2)}</td>
-                <td className="text-center text-danger">-{ficheStockData.lignes.reduce((s, l) => s + Number(l.total_sorties), 0).toFixed(2)}</td>
-                <td className="text-center text-warning">{ficheStockData.lignes.reduce((s, l) => s + Number(l.stock_disponible), 0).toFixed(2)}</td>
-              </tr>
-            </tfoot>
+
           </table>
         </div>
       )}
