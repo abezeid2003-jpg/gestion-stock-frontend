@@ -44,6 +44,11 @@ function App() {
   const [ficheStockMode, setFicheStockMode] = useState("periode"); // "periode" ou "date"
   const [ficheStockData, setFicheStockData] = useState(null);
   const [loadingFicheStock, setLoadingFicheStock] = useState(false);
+  // ETATS SAISIE DATES (texte brut pendant la frappe)
+  const [saisieDate, setSaisieDate] = useState("");
+  const [saisieDateDebut, setSaisieDateDebut] = useState("");
+  const [saisieDateFin, setSaisieDateFin] = useState("");
+  const [saisieEditionDate, setSaisieEditionDate] = useState("");
 
   const chargerStats = () => {
     Promise.all([
@@ -120,6 +125,7 @@ function App() {
 
   const soumettreBon = async (type) => {
     if (!bon.numero_bon || !bon.date_bon) { setMessage("Champs obligatoires manquants !"); return; }
+    if (!dateValide(formatDateFR(bon.date_bon))) { setMessage("Date invalide !"); return; }
     if (type === "bon-entree" && !bon.id_fournisseur) { setMessage("Choisissez un fournisseur !"); return; }
     if (type === "bon-sortie" && !bon.id_client) { setMessage("Choisissez un client !"); return; }
     const body = type === "bon-entree"
@@ -246,22 +252,45 @@ function App() {
     return `${d}/${m}/${y}`;
   };
 
+  // Valider une date française jj/mm/aaaa
+  const dateValide = (val) => {
+    if (!val || val.length !== 10) return false;
+    const p = val.split("/");
+    if (p.length !== 3) return false;
+    const j = parseInt(p[0]), m = parseInt(p[1]), a = parseInt(p[2]);
+    if (isNaN(j) || isNaN(m) || isNaN(a)) return false;
+    if (j < 1 || j > 31) return false;
+    if (m < 1 || m > 12) return false;
+    if (a < 1900 || a > 2100) return false;
+    const date = new Date(a, m - 1, j);
+    return date.getFullYear() === a && date.getMonth() === m - 1 && date.getDate() === j;
+  };
+
+  // Convertir date française jj/mm/aaaa en aaaa-mm-jj
+  const parseDateFR = (val) => {
+    const p = val.split("/");
+    return `${p[2]}-${p[1].padStart(2,"0")}-${p[0].padStart(2,"0")}`;
+  };
+
   // 📊 CHARGER FICHE DE STOCK
   const chargerFicheStock = async () => {
+    // Convertir date française jj/mm/aaaa en aaaa-mm-jj
+    const parseFR = (val) => { const p = val.split("/"); return p.length === 3 ? `${p[2]}-${p[1].padStart(2,"0")}-${p[0].padStart(2,"0")}` : val; };
     let dateDebut, dateFin;
     if (ficheStockMode === "date") {
-      if (!ficheStockDatePrecise) { setMessage("Veuillez choisir une date !"); return; }
-      dateDebut = ficheStockDatePrecise;
-      dateFin = ficheStockDatePrecise;
+      if (!ficheStockDatePrecise || !dateValide(ficheStockDatePrecise)) { setMessage("Veuillez saisir une date valide (jj/mm/aaaa) !"); return; }
+      dateDebut = parseFR(ficheStockDatePrecise);
+      dateFin = parseFR(ficheStockDatePrecise);
     } else {
-      if (!ficheStockDateDebut || !ficheStockDateFin) { setMessage("Veuillez choisir les deux dates !"); return; }
-      dateDebut = ficheStockDateDebut;
-      dateFin = ficheStockDateFin;
+      if (!ficheStockDateDebut || !dateValide(ficheStockDateDebut)) { setMessage("Date debut invalide !"); return; }
+      if (!ficheStockDateFin || !dateValide(ficheStockDateFin)) { setMessage("Date fin invalide !"); return; }
+      dateDebut = parseFR(ficheStockDateDebut);
+      dateFin = parseFR(ficheStockDateFin);
     }
     setLoadingFicheStock(true); setFicheStockData(null);
     try {
       const data = await fetch(`${API}/fiche-stock?date_debut=${dateDebut}&date_fin=${dateFin}`).then((r) => r.json());
-      setFicheStockData({ lignes: data, dateDebut, dateFin });
+      setFicheStockData({ lignes: data, dateDebut: ficheStockMode === "date" ? ficheStockDatePrecise : ficheStockDateDebut, dateFin: ficheStockMode === "date" ? ficheStockDatePrecise : ficheStockDateFin });
     } catch (err) { setMessage("Erreur de chargement de la fiche de stock !"); }
     setLoadingFicheStock(false);
   };
@@ -285,9 +314,9 @@ function App() {
     doc.setFontSize(11);
     doc.setFont("helvetica", "bold");
     if (ficheStockData.dateDebut === ficheStockData.dateFin) {
-      doc.text(`Date : ${formatDateFR(ficheStockData.dateDebut)}`, 15, 42);
+      doc.text(`Date : ${ficheStockData.dateDebut}`, 15, 42);
     } else {
-      doc.text(`Periode : du ${formatDateFR(ficheStockData.dateDebut)} au ${formatDateFR(ficheStockData.dateFin)}`, 15, 42);
+      doc.text(`Periode : du ${ficheStockData.dateDebut} au ${ficheStockData.dateFin}`, 15, 42);
     }
 
     doc.setDrawColor(...couleur);
@@ -347,10 +376,10 @@ function App() {
     mouvements.forEach((m) => {
       if (m._type === "entree") {
         stockCourant += Number(m.quantite);
-        lignesMouvements.push({ date: m.date_bon.substring(0, 10), numero_bon: m.numero_bon, type: "Entree", tiers: m.nom_fournisseur, entree: Number(m.quantite), sortie: "-", stock: stockCourant, _classe: "table-success" });
+        lignesMouvements.push({ date: formatDateFR(m.date_bon.substring(0, 10)), numero_bon: m.numero_bon, type: "Entree", tiers: m.nom_fournisseur, entree: Number(m.quantite), sortie: "-", stock: stockCourant, _classe: "table-success" });
       } else {
         stockCourant -= Number(m.quantite);
-        lignesMouvements.push({ date: m.date_bon.substring(0, 10), numero_bon: m.numero_bon, type: "Sortie", tiers: m.nom_client, entree: "-", sortie: Number(m.quantite), stock: stockCourant, _classe: "table-danger" });
+        lignesMouvements.push({ date: formatDateFR(m.date_bon.substring(0, 10)), numero_bon: m.numero_bon, type: "Sortie", tiers: m.nom_client, entree: "-", sortie: Number(m.quantite), stock: stockCourant, _classe: "table-danger" });
       }
     });
     return lignesMouvements;
@@ -370,7 +399,7 @@ function App() {
     doc.text(estEntree ? "Fournisseur :" : "Client :", 15, 62); doc.text("Observation :", 15, 72);
     doc.setFont("helvetica", "normal");
     doc.text(bonDetail.numero_bon || "-", 60, 42);
-    doc.text(bonDetail.date_bon?.substring(0, 10) || "-", 60, 52);
+    doc.text(formatDateFR(bonDetail.date_bon?.substring(0, 10)) || "-", 60, 52);
     doc.text(estEntree ? (bonDetail.nom_fournisseur || "-") : (bonDetail.nom_client || "-"), 60, 62);
     doc.text(bonDetail.observation || "-", 60, 72);
     doc.setDrawColor(...couleur); doc.setLineWidth(0.5); doc.line(15, 78, 195, 78);
@@ -410,21 +439,30 @@ function App() {
           </div>
           {ficheStockMode === "date" ? (
             <div className="col-md-3">
-              <label className="form-label fw-bold">Date</label>
-              <input type="date" className="form-control" value={ficheStockDatePrecise}
+              <label className="form-label fw-bold">Date (jj/mm/aaaa)</label>
+              <input type="text" className={`form-control ${ficheStockDatePrecise && !dateValide(ficheStockDatePrecise) ? "is-invalid" : ficheStockDatePrecise && dateValide(ficheStockDatePrecise) ? "is-valid" : ""}`}
+                placeholder="jj/mm/aaaa" maxLength={10}
+                value={ficheStockDatePrecise}
                 onChange={(e) => { setFicheStockDatePrecise(e.target.value); setFicheStockData(null); }} />
+              {ficheStockDatePrecise && !dateValide(ficheStockDatePrecise) && <div className="invalid-feedback">Date invalide (ex: 19/05/2026)</div>}
             </div>
           ) : (
             <>
               <div className="col-md-3">
-                <label className="form-label fw-bold">Date Debut</label>
-                <input type="date" className="form-control" value={ficheStockDateDebut}
+                <label className="form-label fw-bold">Date Debut (jj/mm/aaaa)</label>
+                <input type="text" className={`form-control ${ficheStockDateDebut && !dateValide(ficheStockDateDebut) ? "is-invalid" : ficheStockDateDebut && dateValide(ficheStockDateDebut) ? "is-valid" : ""}`}
+                  placeholder="jj/mm/aaaa" maxLength={10}
+                  value={ficheStockDateDebut}
                   onChange={(e) => { setFicheStockDateDebut(e.target.value); setFicheStockData(null); }} />
+                {ficheStockDateDebut && !dateValide(ficheStockDateDebut) && <div className="invalid-feedback">Date invalide (ex: 01/01/2026)</div>}
               </div>
               <div className="col-md-3">
-                <label className="form-label fw-bold">Date Fin</label>
-                <input type="date" className="form-control" value={ficheStockDateFin}
+                <label className="form-label fw-bold">Date Fin (jj/mm/aaaa)</label>
+                <input type="text" className={`form-control ${ficheStockDateFin && !dateValide(ficheStockDateFin) ? "is-invalid" : ficheStockDateFin && dateValide(ficheStockDateFin) ? "is-valid" : ""}`}
+                  placeholder="jj/mm/aaaa" maxLength={10}
+                  value={ficheStockDateFin}
                   onChange={(e) => { setFicheStockDateFin(e.target.value); setFicheStockData(null); }} />
+                {ficheStockDateFin && !dateValide(ficheStockDateFin) && <div className="invalid-feedback">Date invalide (ex: 31/12/2026)</div>}
               </div>
             </>
           )}
@@ -450,8 +488,8 @@ function App() {
           <div className="d-flex justify-content-between align-items-center mb-3">
             <h5 className="text-primary">
               {ficheStockData.dateDebut === ficheStockData.dateFin
-                ? `📅 Stock au ${formatDateFR(ficheStockData.dateDebut)}`
-                : `📅 Stock du ${formatDateFR(ficheStockData.dateDebut)} au ${formatDateFR(ficheStockData.dateFin)}`}
+                ? `📅 Stock au ${ficheStockData.dateDebut}`
+                : `📅 Stock du ${ficheStockData.dateDebut} au ${ficheStockData.dateFin}`}
             </h5>
             <button className="btn btn-success" onClick={imprimerFicheStockPDF}>
               🖨️ Imprimer PDF
@@ -660,7 +698,7 @@ function App() {
       {message && <div className={`alert ${message.includes("succes") ? "alert-success" : "alert-danger"}`}>{message}</div>}
       <div className="row mb-3">
         <div className="col-md-4"><label className="form-label">Numero Bon *</label><input type="text" className="form-control" value={bon.numero_bon} onChange={(e) => setBon({ ...bon, numero_bon: e.target.value })} /></div>
-        <div className="col-md-4"><label className="form-label">Date *</label><input type="date" className="form-control" value={bon.date_bon} onChange={(e) => setBon({ ...bon, date_bon: e.target.value })} /></div>
+        <div className="col-md-4"><label className="form-label">Date * (jj/mm/aaaa)</label><input type="text" className="form-control" placeholder="jj/mm/aaaa" value={saisieDate} onChange={(e) => { setSaisieDate(e.target.value); const p = e.target.value.split("/"); if (p.length === 3 && p[2].length === 4 && !isNaN(p[0]) && !isNaN(p[1])) { setBon({ ...bon, date_bon: `${p[2]}-${p[1].padStart(2,"0")}-${p[0].padStart(2,"0")}` }); } }} /></div>
         <div className="col-md-4">
           {type === "bon-entree" ? (<><label className="form-label">Fournisseur *</label><select className="form-select" value={bon.id_fournisseur} onChange={(e) => setBon({ ...bon, id_fournisseur: e.target.value })}><option value="">-- Choisir --</option>{fournisseurs.map((f) => <option key={f.id_fournisseur} value={f.id_fournisseur}>{f.nom}</option>)}</select></>) : (<><label className="form-label">Client *</label><select className="form-select" value={bon.id_client} onChange={(e) => setBon({ ...bon, id_client: e.target.value })}><option value="">-- Choisir --</option>{clients.map((c) => <option key={c.id_client} value={c.id_client}>{c.nom}</option>)}</select></>)}
         </div>
@@ -687,7 +725,7 @@ function App() {
         {message && <div className={`alert ${message.includes("succes") ? "alert-success" : "alert-danger"}`}>{message}</div>}
         <div className="row mb-3">
           <div className="col-md-4"><label className="form-label">Numero Bon *</label><input type="text" className="form-control" value={bonEnEdition.numero_bon} onChange={(e) => setBonEnEdition({ ...bonEnEdition, numero_bon: e.target.value })} /></div>
-          <div className="col-md-4"><label className="form-label">Date *</label><input type="date" className="form-control" value={bonEnEdition.date_bon?.substring(0, 10)} onChange={(e) => setBonEnEdition({ ...bonEnEdition, date_bon: e.target.value })} /></div>
+          <div className="col-md-4"><label className="form-label">Date * (jj/mm/aaaa)</label><input type="text" className="form-control" placeholder="jj/mm/aaaa" value={saisieEditionDate || (bonEnEdition.date_bon ? formatDateFR(bonEnEdition.date_bon.substring(0, 10)) : "")} onChange={(e) => { setSaisieEditionDate(e.target.value); const p = e.target.value.split("/"); if (p.length === 3 && p[2].length === 4 && !isNaN(p[0]) && !isNaN(p[1])) { setBonEnEdition({ ...bonEnEdition, date_bon: `${p[2]}-${p[1].padStart(2,"0")}-${p[0].padStart(2,"0")}` }); } }} /></div>
           <div className="col-md-4">
             {type === "entree" ? (<><label className="form-label">Fournisseur *</label><select className="form-select" value={bonEnEdition.id_fournisseur} onChange={(e) => setBonEnEdition({ ...bonEnEdition, id_fournisseur: e.target.value })}><option value="">-- Choisir --</option>{fournisseurs.map((f) => <option key={f.id_fournisseur} value={f.id_fournisseur}>{f.nom}</option>)}</select></>) : (<><label className="form-label">Client *</label><select className="form-select" value={bonEnEdition.id_client} onChange={(e) => setBonEnEdition({ ...bonEnEdition, id_client: e.target.value })}><option value="">-- Choisir --</option>{clients.map((c) => <option key={c.id_client} value={c.id_client}>{c.nom}</option>)}</select></>)}
           </div>
@@ -719,7 +757,7 @@ function App() {
           </div>
           <div className="row mb-3">
             <div className="col-md-3"><strong>Numero :</strong> {bonDetail.numero_bon}</div>
-            <div className="col-md-3"><strong>Date :</strong> {bonDetail.date_bon?.substring(0, 10)}</div>
+            <div className="col-md-3"><strong>Date :</strong> {formatDateFR(bonDetail.date_bon?.substring(0, 10))}</div>
             <div className="col-md-3"><strong>{type === "entree" ? "Fournisseur" : "Client"} :</strong> {type === "entree" ? bonDetail.nom_fournisseur : bonDetail.nom_client}</div>
             <div className="col-md-3"><strong>Observation :</strong> {bonDetail.observation}</div>
           </div>
@@ -736,7 +774,7 @@ function App() {
           {loading ? (<div className="text-center"><div className="spinner-border text-primary"></div></div>) : (
             <table className="table table-bordered table-striped table-hover">
               <thead className="table-dark"><tr>{colonnes[page].map((col) => <th key={col}>{col.replace(/_/g, " ").toUpperCase()}</th>)}<th>ACTIONS</th></tr></thead>
-              <tbody>{donneesFiltrees.map((d, i) => (<tr key={i}>{colonnes[page].map((col) => <td key={col}>{col.includes("date") ? d[col]?.substring(0, 10) : d[col]}</td>)}<td className="text-center"><button className="btn btn-primary btn-sm me-2" onClick={() => voirDetailBon(d, type)}>Detail</button><button className="btn btn-warning btn-sm me-2" onClick={() => ouvrirModificationBon(d, type)}>✏️ Modifier</button><button className="btn btn-danger btn-sm" onClick={() => supprimerBon(type === "entree" ? d.id_bon_entree : d.id_bon_sortie, type)}>🗑️ Supprimer</button></td></tr>))}</tbody>
+              <tbody>{donneesFiltrees.map((d, i) => (<tr key={i}>{colonnes[page].map((col) => <td key={col}>{col.includes("date") ? formatDateFR(d[col]?.substring(0, 10)) : d[col]}</td>)}<td className="text-center"><button className="btn btn-primary btn-sm me-2" onClick={() => voirDetailBon(d, type)}>Detail</button><button className="btn btn-warning btn-sm me-2" onClick={() => ouvrirModificationBon(d, type)}>✏️ Modifier</button><button className="btn btn-danger btn-sm" onClick={() => supprimerBon(type === "entree" ? d.id_bon_entree : d.id_bon_sortie, type)}>🗑️ Supprimer</button></td></tr>))}</tbody>
             </table>
           )}
         </>
