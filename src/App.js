@@ -122,7 +122,6 @@ function App() {
     const newLignes = [...lignesEdition]; newLignes[index][champ] = valeur; setLignesEdition(newLignes);
   };
 
-  // Formater date en français jj/mm/aaaa
   const formatDateFR = (dateStr) => {
     if (!dateStr || dateStr === "-") return "-";
     const parts = dateStr.split("-");
@@ -130,7 +129,6 @@ function App() {
     return `${parts[2]}/${parts[1]}/${parts[0]}`;
   };
 
-  // Valider une date française jj/mm/aaaa
   const dateValide = (val) => {
     if (!val || val.length !== 10) return false;
     const p = val.split("/");
@@ -144,7 +142,6 @@ function App() {
     return date.getFullYear() === a && date.getMonth() === m - 1 && date.getDate() === j;
   };
 
-  // Convertir date française jj/mm/aaaa en aaaa-mm-jj
   const parseFR = (val) => {
     const p = val.split("/");
     return p.length === 3 ? `${p[2]}-${p[1].padStart(2,"0")}-${p[0].padStart(2,"0")}` : val;
@@ -367,6 +364,91 @@ function App() {
     return lignesMouvements;
   };
 
+  // 🖨️ IMPRESSION PDF FICHE MOUVEMENTS
+  const imprimerMouvementsPDF = () => {
+    if (!ficheMouvements) return;
+    const { produit, totaux } = ficheMouvements;
+    const tableauLignes = construireTableauMouvements();
+    const doc = new jsPDF({ orientation: "landscape" });
+    const couleur = [13, 110, 253];
+
+    // En-tête
+    doc.setFillColor(...couleur);
+    doc.rect(0, 0, 297, 25, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(16); doc.setFont("helvetica", "bold");
+    doc.text("GESTION DE STOCK", 148, 10, { align: "center" });
+    doc.setFontSize(12);
+    doc.text("FICHE DE MOUVEMENTS", 148, 20, { align: "center" });
+
+    // Info produit
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(10); doc.setFont("helvetica", "bold");
+    doc.text(`Code : ${produit.code_produit}`, 15, 35);
+    doc.text(`Designation : ${produit.designation}`, 60, 35);
+    doc.text(`Unite : ${produit.unite}`, 150, 35);
+    doc.text(`Prix Achat : ${produit.prix_achat} MRU`, 185, 35);
+    doc.text(`Prix Vente : ${produit.prix_vente} MRU`, 237, 35);
+
+    doc.setDrawColor(...couleur); doc.setLineWidth(0.5); doc.line(15, 40, 282, 40);
+
+    // Tableau mouvements
+    autoTable(doc, {
+      startY: 45,
+      head: [["Date", "N° Bon", "Type", "Fournisseur / Client", "Entree", "Sortie", "Stock"]],
+      body: tableauLignes.map((l) => [
+        l.date,
+        l.numero_bon,
+        l.type,
+        l.tiers,
+        l.entree !== "-" ? l.entree : "",
+        l.sortie !== "-" ? l.sortie : "",
+        l.stock,
+      ]),
+      foot: [["", "", "", "TOTAUX :", totaux.total_entrees, totaux.total_sorties, totaux.stock_final]],
+      headStyles: { fillColor: couleur, textColor: 255, fontStyle: "bold" },
+      footStyles: { fillColor: [40, 40, 40], textColor: 255, fontStyle: "bold" },
+      alternateRowStyles: { fillColor: [249, 249, 249] },
+      styles: { fontSize: 9, cellPadding: 3 },
+      columnStyles: {
+        0: { cellWidth: 25 },
+        1: { cellWidth: 25 },
+        2: { cellWidth: 25 },
+        3: { cellWidth: 90 },
+        4: { cellWidth: 25, halign: "center" },
+        5: { cellWidth: 25, halign: "center" },
+        6: { cellWidth: 25, halign: "center" },
+      },
+      didParseCell: (data) => {
+        if (data.section === "body") {
+          const type = tableauLignes[data.row.index]?.type;
+          if (type === "Stock Initial") data.cell.styles.fillColor = [217, 237, 247];
+          else if (type === "Entree") data.cell.styles.fillColor = [212, 237, 218];
+          else if (type === "Sortie") data.cell.styles.fillColor = [248, 215, 218];
+        }
+      },
+    });
+
+    // Résumé bas de page
+    const finalY = doc.lastAutoTable.finalY + 8;
+    doc.setFontSize(10); doc.setFont("helvetica", "bold");
+    doc.setFillColor(23, 162, 184); doc.rect(15, finalY, 55, 12, "F");
+    doc.setFillColor(25, 135, 84); doc.rect(75, finalY, 55, 12, "F");
+    doc.setFillColor(220, 53, 69); doc.rect(135, finalY, 55, 12, "F");
+    doc.setFillColor(13, 110, 253); doc.rect(195, finalY, 55, 12, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.text(`Stock Initial: ${totaux.qte_initiale}`, 42, finalY + 8, { align: "center" });
+    doc.text(`Total Entrees: +${totaux.total_entrees}`, 102, finalY + 8, { align: "center" });
+    doc.text(`Total Sorties: -${totaux.total_sorties}`, 162, finalY + 8, { align: "center" });
+    doc.text(`Stock Final: ${totaux.stock_final}`, 222, finalY + 8, { align: "center" });
+
+    const pageHeight = doc.internal.pageSize.height;
+    doc.setFontSize(8); doc.setTextColor(150, 150, 150); doc.setFont("helvetica", "normal");
+    doc.text(`Document genere le ${new Date().toLocaleDateString("fr-FR")} a ${new Date().toLocaleTimeString("fr-FR")}`, 148, pageHeight - 8, { align: "center" });
+
+    doc.save(`Fiche_Mouvements_${produit.code_produit}_${produit.designation}.pdf`);
+  };
+
   const imprimerBonPDF = (type) => {
     const doc = new jsPDF();
     const estEntree = type === "entree";
@@ -510,12 +592,16 @@ function App() {
         const { produit, totaux } = ficheMouvements;
         return (
           <div className="card p-4">
-            <div className="row mb-3 p-3 bg-primary text-white rounded">
-              <div className="col-md-3"><strong>Code :</strong> {produit.code_produit}</div>
-              <div className="col-md-3"><strong>Designation :</strong> {produit.designation}</div>
-              <div className="col-md-2"><strong>Unite :</strong> {produit.unite}</div>
-              <div className="col-md-2"><strong>Prix Achat :</strong> {produit.prix_achat} MRU</div>
-              <div className="col-md-2"><strong>Prix Vente :</strong> {produit.prix_vente} MRU</div>
+            {/* Bouton imprimer PDF */}
+            <div className="d-flex justify-content-between align-items-center mb-3">
+              <div className="row p-3 bg-primary text-white rounded w-100 me-3">
+                <div className="col-md-3"><strong>Code :</strong> {produit.code_produit}</div>
+                <div className="col-md-3"><strong>Designation :</strong> {produit.designation}</div>
+                <div className="col-md-2"><strong>Unite :</strong> {produit.unite}</div>
+                <div className="col-md-2"><strong>Prix Achat :</strong> {produit.prix_achat} MRU</div>
+                <div className="col-md-2"><strong>Prix Vente :</strong> {produit.prix_vente} MRU</div>
+              </div>
+              <button className="btn btn-success text-nowrap" onClick={imprimerMouvementsPDF}>🖨️ Imprimer PDF</button>
             </div>
             <table className="table table-bordered table-hover">
               <thead className="table-dark">
@@ -656,10 +742,7 @@ function App() {
           <label className="form-label">Date * (jj/mm/aaaa)</label>
           <input type="text" className={`form-control ${saisieDate && !dateValide(saisieDate) ? "is-invalid" : saisieDate && dateValide(saisieDate) ? "is-valid" : ""}`}
             placeholder="jj/mm/aaaa" maxLength={10} value={saisieDate}
-            onChange={(e) => {
-              setSaisieDate(e.target.value);
-              if (dateValide(e.target.value)) setBon({ ...bon, date_bon: parseFR(e.target.value) });
-            }} />
+            onChange={(e) => { setSaisieDate(e.target.value); if (dateValide(e.target.value)) setBon({ ...bon, date_bon: parseFR(e.target.value) }); }} />
           {saisieDate && !dateValide(saisieDate) && <div className="invalid-feedback">Date invalide (ex: 19/05/2026)</div>}
         </div>
         <div className="col-md-4">
@@ -692,10 +775,7 @@ function App() {
             <label className="form-label">Date * (jj/mm/aaaa)</label>
             <input type="text" className="form-control" placeholder="jj/mm/aaaa" maxLength={10}
               value={saisieEditionDate || (bonEnEdition.date_bon ? formatDateFR(bonEnEdition.date_bon.substring(0, 10)) : "")}
-              onChange={(e) => {
-                setSaisieEditionDate(e.target.value);
-                if (dateValide(e.target.value)) setBonEnEdition({ ...bonEnEdition, date_bon: parseFR(e.target.value) });
-              }} />
+              onChange={(e) => { setSaisieEditionDate(e.target.value); if (dateValide(e.target.value)) setBonEnEdition({ ...bonEnEdition, date_bon: parseFR(e.target.value) }); }} />
           </div>
           <div className="col-md-4">
             {type === "entree" ? (<><label className="form-label">Fournisseur *</label><select className="form-select" value={bonEnEdition.id_fournisseur} onChange={(e) => setBonEnEdition({ ...bonEnEdition, id_fournisseur: e.target.value })}><option value="">-- Choisir --</option>{fournisseurs.map((f) => <option key={f.id_fournisseur} value={f.id_fournisseur}>{f.nom}</option>)}</select></>) : (<><label className="form-label">Client *</label><select className="form-select" value={bonEnEdition.id_client} onChange={(e) => setBonEnEdition({ ...bonEnEdition, id_client: e.target.value })}><option value="">-- Choisir --</option>{clients.map((c) => <option key={c.id_client} value={c.id_client}>{c.nom}</option>)}</select></>)}
