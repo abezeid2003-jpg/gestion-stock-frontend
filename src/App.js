@@ -37,17 +37,14 @@ function App() {
   const [ficheMouvements, setFicheMouvements] = useState(null);
   const [loadingMouvements, setLoadingMouvements] = useState(false);
 
-  // 📊 ETATS FICHE DE STOCK
+  // ETATS FICHE DE STOCK
   const [ficheStockDateDebut, setFicheStockDateDebut] = useState("");
   const [ficheStockDateFin, setFicheStockDateFin] = useState("");
   const [ficheStockDatePrecise, setFicheStockDatePrecise] = useState("");
-  const [ficheStockMode, setFicheStockMode] = useState("periode"); // "periode" ou "date"
+  const [ficheStockMode, setFicheStockMode] = useState("periode");
   const [ficheStockData, setFicheStockData] = useState(null);
   const [loadingFicheStock, setLoadingFicheStock] = useState(false);
-  // ETATS SAISIE DATES (texte brut pendant la frappe)
   const [saisieDate, setSaisieDate] = useState("");
-  const [saisieDateDebut, setSaisieDateDebut] = useState("");
-  const [saisieDateFin, setSaisieDateFin] = useState("");
   const [saisieEditionDate, setSaisieEditionDate] = useState("");
 
   const chargerStats = () => {
@@ -110,6 +107,8 @@ function App() {
     setBon({ numero_bon: "", date_bon: "", id_fournisseur: "", id_client: "", observation: "" });
     setLignes([{ id_produit: "", quantite: "", prix_unitaire: "" }]);
     setMessage("");
+    setSaisieDate("");
+    setSaisieEditionDate("");
   };
 
   const ajouterLigne = () => setLignes([...lignes, { id_produit: "", quantite: "", prix_unitaire: "" }]);
@@ -121,6 +120,34 @@ function App() {
   const supprimerLigneEdition = (index) => setLignesEdition(lignesEdition.filter((_, i) => i !== index));
   const modifierLigneEdition = (index, champ, valeur) => {
     const newLignes = [...lignesEdition]; newLignes[index][champ] = valeur; setLignesEdition(newLignes);
+  };
+
+  // Formater date en français jj/mm/aaaa
+  const formatDateFR = (dateStr) => {
+    if (!dateStr || dateStr === "-") return "-";
+    const parts = dateStr.split("-");
+    if (parts.length !== 3) return dateStr;
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  };
+
+  // Valider une date française jj/mm/aaaa
+  const dateValide = (val) => {
+    if (!val || val.length !== 10) return false;
+    const p = val.split("/");
+    if (p.length !== 3) return false;
+    const j = parseInt(p[0]), m = parseInt(p[1]), a = parseInt(p[2]);
+    if (isNaN(j) || isNaN(m) || isNaN(a)) return false;
+    if (j < 1 || j > 31) return false;
+    if (m < 1 || m > 12) return false;
+    if (a < 1900 || a > 2100) return false;
+    const date = new Date(a, m - 1, j);
+    return date.getFullYear() === a && date.getMonth() === m - 1 && date.getDate() === j;
+  };
+
+  // Convertir date française jj/mm/aaaa en aaaa-mm-jj
+  const parseFR = (val) => {
+    const p = val.split("/");
+    return p.length === 3 ? `${p[2]}-${p[1].padStart(2,"0")}-${p[0].padStart(2,"0")}` : val;
   };
 
   const soumettreBon = async (type) => {
@@ -190,6 +217,7 @@ function App() {
 
   const ouvrirModificationBon = async (bonData, type) => {
     setBonEnEdition({ ...bonData, _type: type });
+    setSaisieEditionDate("");
     const url = type === "entree" ? `${API}/bons-entree/${bonData.id_bon_entree}/lignes` : `${API}/bons-sortie/${bonData.id_bon_sortie}/lignes`;
     const lignesData = await fetch(url).then((r) => r.json());
     setLignesEdition(lignesData.map((l) => ({ id_produit: l.id_produit, quantite: l.quantite, prix_unitaire: l.prix_unitaire })));
@@ -245,37 +273,7 @@ function App() {
     setLoadingMouvements(false);
   };
 
-  // Formater date en français jj/mm/aaaa
-  const formatDateFR = (dateStr) => {
-    if (!dateStr) return "-";
-    const [y, m, d] = dateStr.split("-");
-    return `${d}/${m}/${y}`;
-  };
-
-  // Valider une date française jj/mm/aaaa
-  const dateValide = (val) => {
-    if (!val || val.length !== 10) return false;
-    const p = val.split("/");
-    if (p.length !== 3) return false;
-    const j = parseInt(p[0]), m = parseInt(p[1]), a = parseInt(p[2]);
-    if (isNaN(j) || isNaN(m) || isNaN(a)) return false;
-    if (j < 1 || j > 31) return false;
-    if (m < 1 || m > 12) return false;
-    if (a < 1900 || a > 2100) return false;
-    const date = new Date(a, m - 1, j);
-    return date.getFullYear() === a && date.getMonth() === m - 1 && date.getDate() === j;
-  };
-
-  // Convertir date française jj/mm/aaaa en aaaa-mm-jj
-  const parseDateFR = (val) => {
-    const p = val.split("/");
-    return `${p[2]}-${p[1].padStart(2,"0")}-${p[0].padStart(2,"0")}`;
-  };
-
-  // 📊 CHARGER FICHE DE STOCK
   const chargerFicheStock = async () => {
-    // Convertir date française jj/mm/aaaa en aaaa-mm-jj
-    const parseFR = (val) => { const p = val.split("/"); return p.length === 3 ? `${p[2]}-${p[1].padStart(2,"0")}-${p[0].padStart(2,"0")}` : val; };
     let dateDebut, dateFin;
     if (ficheStockMode === "date") {
       if (!ficheStockDatePrecise || !dateValide(ficheStockDatePrecise)) { setMessage("Veuillez saisir une date valide (jj/mm/aaaa) !"); return; }
@@ -290,46 +288,39 @@ function App() {
     setLoadingFicheStock(true); setFicheStockData(null);
     try {
       const data = await fetch(`${API}/fiche-stock?date_debut=${dateDebut}&date_fin=${dateFin}`).then((r) => r.json());
-      setFicheStockData({ lignes: data, dateDebut: ficheStockMode === "date" ? ficheStockDatePrecise : ficheStockDateDebut, dateFin: ficheStockMode === "date" ? ficheStockDatePrecise : ficheStockDateFin });
+      setFicheStockData({
+        lignes: data,
+        dateDebut: ficheStockMode === "date" ? ficheStockDatePrecise : ficheStockDateDebut,
+        dateFin: ficheStockMode === "date" ? ficheStockDatePrecise : ficheStockDateFin
+      });
     } catch (err) { setMessage("Erreur de chargement de la fiche de stock !"); }
     setLoadingFicheStock(false);
   };
 
-  // 📊 IMPRESSION PDF FICHE DE STOCK
   const imprimerFicheStockPDF = () => {
     if (!ficheStockData) return;
     const doc = new jsPDF();
     const couleur = [13, 110, 253];
-
     doc.setFillColor(...couleur);
     doc.rect(0, 0, 210, 30, "F");
     doc.setTextColor(255, 255, 255);
-    doc.setFontSize(20);
-    doc.setFont("helvetica", "bold");
+    doc.setFontSize(20); doc.setFont("helvetica", "bold");
     doc.text("GESTION DE STOCK", 105, 13, { align: "center" });
     doc.setFontSize(13);
     doc.text("FICHE DE STOCK", 105, 23, { align: "center" });
-
     doc.setTextColor(0, 0, 0);
-    doc.setFontSize(11);
-    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11); doc.setFont("helvetica", "bold");
     if (ficheStockData.dateDebut === ficheStockData.dateFin) {
       doc.text(`Date : ${ficheStockData.dateDebut}`, 15, 42);
     } else {
       doc.text(`Periode : du ${ficheStockData.dateDebut} au ${ficheStockData.dateFin}`, 15, 42);
     }
-
-    doc.setDrawColor(...couleur);
-    doc.setLineWidth(0.5);
-    doc.line(15, 48, 195, 48);
-
+    doc.setDrawColor(...couleur); doc.setLineWidth(0.5); doc.line(15, 48, 195, 48);
     autoTable(doc, {
       startY: 53,
       head: [["Code", "Designation", "Unite", "Stock Initial", "Total Entrees", "Total Sorties", "Stock Disponible"]],
       body: ficheStockData.lignes.map((l) => [
-        l.code_produit,
-        l.designation,
-        l.unite,
+        l.code_produit, l.designation, l.unite,
         Number(l.stock_initial).toFixed(2),
         Number(l.total_entrees).toFixed(2),
         Number(l.total_sorties).toFixed(2),
@@ -339,23 +330,14 @@ function App() {
       alternateRowStyles: { fillColor: [249, 249, 249] },
       styles: { fontSize: 9, cellPadding: 3 },
       columnStyles: {
-        0: { cellWidth: 20 },
-        1: { cellWidth: 55 },
-        2: { cellWidth: 18 },
-        3: { cellWidth: 23, halign: "right" },
-        4: { cellWidth: 23, halign: "right" },
-        5: { cellWidth: 23, halign: "right" },
-        6: { cellWidth: 28, halign: "right" },
+        0: { cellWidth: 20 }, 1: { cellWidth: 55 }, 2: { cellWidth: 18 },
+        3: { cellWidth: 23, halign: "right" }, 4: { cellWidth: 23, halign: "right" },
+        5: { cellWidth: 23, halign: "right" }, 6: { cellWidth: 28, halign: "right" },
       },
     });
-
     const pageHeight = doc.internal.pageSize.height;
-    doc.setFontSize(9);
-    doc.setTextColor(150, 150, 150);
-    doc.text(
-      `Document genere le ${new Date().toLocaleDateString("fr-FR")} a ${new Date().toLocaleTimeString("fr-FR")}`,
-      105, pageHeight - 10, { align: "center" }
-    );
+    doc.setFontSize(9); doc.setTextColor(150, 150, 150);
+    doc.text(`Document genere le ${new Date().toLocaleDateString("fr-FR")} a ${new Date().toLocaleTimeString("fr-FR")}`, 105, pageHeight - 10, { align: "center" });
     doc.save(`Fiche_Stock_${ficheStockData.dateDebut}_${ficheStockData.dateFin}.pdf`);
   };
 
@@ -364,7 +346,7 @@ function App() {
     const { stock_initial, entrees, sorties } = ficheMouvements;
     let lignesMouvements = [];
     lignesMouvements.push({
-      date: stock_initial.date_saisie ? stock_initial.date_saisie.substring(0, 10) : "-",
+      date: stock_initial.date_saisie ? formatDateFR(stock_initial.date_saisie.substring(0, 10)) : "-",
       numero_bon: "-", type: "Stock Initial", tiers: "-", entree: "-", sortie: "-",
       stock: Number(stock_initial.quantite) || 0, _classe: "table-info fw-bold",
     });
@@ -422,12 +404,9 @@ function App() {
     doc.save(`${titre.replace(" ", "_")}_${bonDetail.numero_bon}.pdf`);
   };
 
-  // 📊 PAGE FICHE DE STOCK
   const renderFicheStock = () => (
     <div>
       <h4 className="mb-4">📊 Fiche de Stock</h4>
-
-      {/* Filtres */}
       <div className="card p-3 mb-4">
         <div className="row g-3 align-items-end">
           <div className="col-md-3">
@@ -441,8 +420,7 @@ function App() {
             <div className="col-md-3">
               <label className="form-label fw-bold">Date (jj/mm/aaaa)</label>
               <input type="text" className={`form-control ${ficheStockDatePrecise && !dateValide(ficheStockDatePrecise) ? "is-invalid" : ficheStockDatePrecise && dateValide(ficheStockDatePrecise) ? "is-valid" : ""}`}
-                placeholder="jj/mm/aaaa" maxLength={10}
-                value={ficheStockDatePrecise}
+                placeholder="jj/mm/aaaa" maxLength={10} value={ficheStockDatePrecise}
                 onChange={(e) => { setFicheStockDatePrecise(e.target.value); setFicheStockData(null); }} />
               {ficheStockDatePrecise && !dateValide(ficheStockDatePrecise) && <div className="invalid-feedback">Date invalide (ex: 19/05/2026)</div>}
             </div>
@@ -451,38 +429,25 @@ function App() {
               <div className="col-md-3">
                 <label className="form-label fw-bold">Date Debut (jj/mm/aaaa)</label>
                 <input type="text" className={`form-control ${ficheStockDateDebut && !dateValide(ficheStockDateDebut) ? "is-invalid" : ficheStockDateDebut && dateValide(ficheStockDateDebut) ? "is-valid" : ""}`}
-                  placeholder="jj/mm/aaaa" maxLength={10}
-                  value={ficheStockDateDebut}
+                  placeholder="jj/mm/aaaa" maxLength={10} value={ficheStockDateDebut}
                   onChange={(e) => { setFicheStockDateDebut(e.target.value); setFicheStockData(null); }} />
                 {ficheStockDateDebut && !dateValide(ficheStockDateDebut) && <div className="invalid-feedback">Date invalide (ex: 01/01/2026)</div>}
               </div>
               <div className="col-md-3">
                 <label className="form-label fw-bold">Date Fin (jj/mm/aaaa)</label>
                 <input type="text" className={`form-control ${ficheStockDateFin && !dateValide(ficheStockDateFin) ? "is-invalid" : ficheStockDateFin && dateValide(ficheStockDateFin) ? "is-valid" : ""}`}
-                  placeholder="jj/mm/aaaa" maxLength={10}
-                  value={ficheStockDateFin}
+                  placeholder="jj/mm/aaaa" maxLength={10} value={ficheStockDateFin}
                   onChange={(e) => { setFicheStockDateFin(e.target.value); setFicheStockData(null); }} />
                 {ficheStockDateFin && !dateValide(ficheStockDateFin) && <div className="invalid-feedback">Date invalide (ex: 31/12/2026)</div>}
               </div>
             </>
           )}
           <div className="col-md-3">
-            <button className="btn btn-primary w-100" onClick={chargerFicheStock}>
-              🔍 Afficher la Fiche
-            </button>
+            <button className="btn btn-primary w-100" onClick={chargerFicheStock}>🔍 Afficher la Fiche</button>
           </div>
         </div>
       </div>
-
-      {/* Chargement */}
-      {loadingFicheStock && (
-        <div className="text-center my-4">
-          <div className="spinner-border text-primary"></div>
-          <p className="mt-2">Chargement...</p>
-        </div>
-      )}
-
-      {/* Résultats */}
+      {loadingFicheStock && (<div className="text-center my-4"><div className="spinner-border text-primary"></div><p className="mt-2">Chargement...</p></div>)}
       {ficheStockData && !loadingFicheStock && (
         <div className="card p-4">
           <div className="d-flex justify-content-between align-items-center mb-3">
@@ -491,17 +456,12 @@ function App() {
                 ? `📅 Stock au ${ficheStockData.dateDebut}`
                 : `📅 Stock du ${ficheStockData.dateDebut} au ${ficheStockData.dateFin}`}
             </h5>
-            <button className="btn btn-success" onClick={imprimerFicheStockPDF}>
-              🖨️ Imprimer PDF
-            </button>
+            <button className="btn btn-success" onClick={imprimerFicheStockPDF}>🖨️ Imprimer PDF</button>
           </div>
-
           <table className="table table-bordered table-striped table-hover">
             <thead className="table-dark">
               <tr>
-                <th>Code</th>
-                <th>Designation</th>
-                <th>Unite</th>
+                <th>Code</th><th>Designation</th><th>Unite</th>
                 <th className="text-center text-info">Stock Initial</th>
                 <th className="text-center text-success">Total Entrees</th>
                 <th className="text-center text-danger">Total Sorties</th>
@@ -510,10 +470,8 @@ function App() {
             </thead>
             <tbody>
               {ficheStockData.lignes.map((l, i) => (
-                <tr key={i} className={Number(l.stock_disponible) <= 0 ? "table-danger" : Number(l.stock_disponible) <= Number(l.stock_minimum) ? "table-warning" : ""}>
-                  <td>{l.code_produit}</td>
-                  <td>{l.designation}</td>
-                  <td>{l.unite}</td>
+                <tr key={i} className={Number(l.stock_disponible) <= 0 ? "table-danger" : ""}>
+                  <td>{l.code_produit}</td><td>{l.designation}</td><td>{l.unite}</td>
                   <td className="text-center">{Number(l.stock_initial).toFixed(2)}</td>
                   <td className="text-center text-success fw-bold">+{Number(l.total_entrees).toFixed(2)}</td>
                   <td className="text-center text-danger fw-bold">-{Number(l.total_sorties).toFixed(2)}</td>
@@ -523,7 +481,6 @@ function App() {
                 </tr>
               ))}
             </tbody>
-
           </table>
         </div>
       )}
@@ -537,20 +494,17 @@ function App() {
         <div className="row g-2 align-items-end">
           <div className="col-md-6">
             <label className="form-label fw-bold">Choisir un Produit</label>
-            <select className="form-select" value={produitSelectionne}
-              onChange={(e) => { setProduitSelectionne(e.target.value); setFicheMouvements(null); }}>
+            <select className="form-select" value={produitSelectionne} onChange={(e) => { setProduitSelectionne(e.target.value); setFicheMouvements(null); }}>
               <option value="">-- Selectionner un produit --</option>
               {produits.map((p) => (<option key={p.id_produit} value={p.id_produit}>{p.code_produit} — {p.designation}</option>))}
             </select>
           </div>
           <div className="col-md-3">
-            <button className="btn btn-primary w-100" onClick={chargerMouvements} disabled={!produitSelectionne}>
-              🔍 Afficher les Mouvements
-            </button>
+            <button className="btn btn-primary w-100" onClick={chargerMouvements} disabled={!produitSelectionne}>🔍 Afficher les Mouvements</button>
           </div>
         </div>
       </div>
-      {loadingMouvements && (<div className="text-center my-4"><div className="spinner-border text-primary"></div><p className="mt-2">Chargement...</p></div>)}
+      {loadingMouvements && (<div className="text-center my-4"><div className="spinner-border text-primary"></div></div>)}
       {ficheMouvements && !loadingMouvements && (() => {
         const tableauLignes = construireTableauMouvements();
         const { produit, totaux } = ficheMouvements;
@@ -698,7 +652,16 @@ function App() {
       {message && <div className={`alert ${message.includes("succes") ? "alert-success" : "alert-danger"}`}>{message}</div>}
       <div className="row mb-3">
         <div className="col-md-4"><label className="form-label">Numero Bon *</label><input type="text" className="form-control" value={bon.numero_bon} onChange={(e) => setBon({ ...bon, numero_bon: e.target.value })} /></div>
-        <div className="col-md-4"><label className="form-label">Date * (jj/mm/aaaa)</label><input type="text" className="form-control" placeholder="jj/mm/aaaa" value={saisieDate} onChange={(e) => { setSaisieDate(e.target.value); const p = e.target.value.split("/"); if (p.length === 3 && p[2].length === 4 && !isNaN(p[0]) && !isNaN(p[1])) { setBon({ ...bon, date_bon: `${p[2]}-${p[1].padStart(2,"0")}-${p[0].padStart(2,"0")}` }); } }} /></div>
+        <div className="col-md-4">
+          <label className="form-label">Date * (jj/mm/aaaa)</label>
+          <input type="text" className={`form-control ${saisieDate && !dateValide(saisieDate) ? "is-invalid" : saisieDate && dateValide(saisieDate) ? "is-valid" : ""}`}
+            placeholder="jj/mm/aaaa" maxLength={10} value={saisieDate}
+            onChange={(e) => {
+              setSaisieDate(e.target.value);
+              if (dateValide(e.target.value)) setBon({ ...bon, date_bon: parseFR(e.target.value) });
+            }} />
+          {saisieDate && !dateValide(saisieDate) && <div className="invalid-feedback">Date invalide (ex: 19/05/2026)</div>}
+        </div>
         <div className="col-md-4">
           {type === "bon-entree" ? (<><label className="form-label">Fournisseur *</label><select className="form-select" value={bon.id_fournisseur} onChange={(e) => setBon({ ...bon, id_fournisseur: e.target.value })}><option value="">-- Choisir --</option>{fournisseurs.map((f) => <option key={f.id_fournisseur} value={f.id_fournisseur}>{f.nom}</option>)}</select></>) : (<><label className="form-label">Client *</label><select className="form-select" value={bon.id_client} onChange={(e) => setBon({ ...bon, id_client: e.target.value })}><option value="">-- Choisir --</option>{clients.map((c) => <option key={c.id_client} value={c.id_client}>{c.nom}</option>)}</select></>)}
         </div>
@@ -725,7 +688,15 @@ function App() {
         {message && <div className={`alert ${message.includes("succes") ? "alert-success" : "alert-danger"}`}>{message}</div>}
         <div className="row mb-3">
           <div className="col-md-4"><label className="form-label">Numero Bon *</label><input type="text" className="form-control" value={bonEnEdition.numero_bon} onChange={(e) => setBonEnEdition({ ...bonEnEdition, numero_bon: e.target.value })} /></div>
-          <div className="col-md-4"><label className="form-label">Date * (jj/mm/aaaa)</label><input type="text" className="form-control" placeholder="jj/mm/aaaa" value={saisieEditionDate || (bonEnEdition.date_bon ? formatDateFR(bonEnEdition.date_bon.substring(0, 10)) : "")} onChange={(e) => { setSaisieEditionDate(e.target.value); const p = e.target.value.split("/"); if (p.length === 3 && p[2].length === 4 && !isNaN(p[0]) && !isNaN(p[1])) { setBonEnEdition({ ...bonEnEdition, date_bon: `${p[2]}-${p[1].padStart(2,"0")}-${p[0].padStart(2,"0")}` }); } }} /></div>
+          <div className="col-md-4">
+            <label className="form-label">Date * (jj/mm/aaaa)</label>
+            <input type="text" className="form-control" placeholder="jj/mm/aaaa" maxLength={10}
+              value={saisieEditionDate || (bonEnEdition.date_bon ? formatDateFR(bonEnEdition.date_bon.substring(0, 10)) : "")}
+              onChange={(e) => {
+                setSaisieEditionDate(e.target.value);
+                if (dateValide(e.target.value)) setBonEnEdition({ ...bonEnEdition, date_bon: parseFR(e.target.value) });
+              }} />
+          </div>
           <div className="col-md-4">
             {type === "entree" ? (<><label className="form-label">Fournisseur *</label><select className="form-select" value={bonEnEdition.id_fournisseur} onChange={(e) => setBonEnEdition({ ...bonEnEdition, id_fournisseur: e.target.value })}><option value="">-- Choisir --</option>{fournisseurs.map((f) => <option key={f.id_fournisseur} value={f.id_fournisseur}>{f.nom}</option>)}</select></>) : (<><label className="form-label">Client *</label><select className="form-select" value={bonEnEdition.id_client} onChange={(e) => setBonEnEdition({ ...bonEnEdition, id_client: e.target.value })}><option value="">-- Choisir --</option>{clients.map((c) => <option key={c.id_client} value={c.id_client}>{c.nom}</option>)}</select></>)}
           </div>
