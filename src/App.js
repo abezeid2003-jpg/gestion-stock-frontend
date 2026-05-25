@@ -362,7 +362,9 @@ function App() {
     if (!ficheMouvements) return [];
     const { stock_initial, entrees, sorties } = ficheMouvements;
     let lignesMouvements = [];
-    lignesMouvements.push({ date: stock_initial.date_saisie ? formatDateFR(stock_initial.date_saisie.substring(0, 10)) : "-", numero_bon: "-", type: "Stock Initial", tiers: "-", entree: "-", sortie: "-", stock: Number(stock_initial.quantite) || 0, _classe: "table-info fw-bold" });
+    if (Number(stock_initial.quantite) > 0) {
+      lignesMouvements.push({ date: stock_initial.date_saisie ? formatDateFR(stock_initial.date_saisie.substring(0, 10)) : "-", numero_bon: "-", type: "Stock Initial", tiers: "-", entree: "-", sortie: "-", stock: Number(stock_initial.quantite) || 0, _classe: "table-info fw-bold" });
+    }
     const mouvements = [...entrees.map((e) => ({ ...e, _type: "entree" })), ...sorties.map((s) => ({ ...s, _type: "sortie" }))].sort((a, b) => new Date(a.date_bon) - new Date(b.date_bon));
     let stockCourant = Number(stock_initial.quantite) || 0;
     mouvements.forEach((m) => {
