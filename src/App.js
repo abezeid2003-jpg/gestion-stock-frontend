@@ -7,7 +7,7 @@ import {
 } from "recharts";
 
 function App() {
-  const API = "https://gestion-stock-backend-5qm3.onrender.com";
+  const API = "https://gestion-stock-backend-5qm3.onrender.com"; // v2
 
   // ETATS AUTHENTIFICATION
   const [token, setToken] = useState(localStorage.getItem("token") || null);
