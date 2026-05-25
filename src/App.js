@@ -9,52 +9,27 @@ import {
 function App() {
   const API = "https://gestion-stock-backend-5qm3.onrender.com"; // v2
 
-  // ETATS AUTHENTIFICATION
   const [token, setToken] = useState(localStorage.getItem("token") || null);
   const [utilisateur, setUtilisateur] = useState(JSON.parse(localStorage.getItem("utilisateur") || "null"));
   const [loginForm, setLoginForm] = useState({ login: "", mot_de_passe: "" });
   const [loginErreur, setLoginErreur] = useState("");
   const [loadingLogin, setLoadingLogin] = useState(false);
-
   const isAdmin = utilisateur?.role === "admin";
 
-  // HEADERS avec token
-  const headers = () => ({
-    "Content-Type": "application/json",
-    "Authorization": `Bearer ${token}`
-  });
+  const headers = () => ({ "Content-Type": "application/json", "Authorization": `Bearer ${token}` });
 
   const seConnecter = async () => {
-    setLoginErreur("");
-    setLoadingLogin(true);
+    setLoginErreur(""); setLoadingLogin(true);
     try {
-      const response = await fetch(`${API}/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(loginForm),
-      });
+      const response = await fetch(`${API}/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(loginForm) });
       const data = await response.json();
-      if (data.success) {
-        setToken(data.token);
-        setUtilisateur(data.utilisateur);
-        localStorage.setItem("token", data.token);
-        localStorage.setItem("utilisateur", JSON.stringify(data.utilisateur));
-      } else {
-        setLoginErreur(data.error || "Login ou mot de passe incorrect");
-      }
-    } catch (err) {
-      setLoginErreur("Erreur de connexion au serveur !");
-    }
+      if (data.success) { setToken(data.token); setUtilisateur(data.utilisateur); localStorage.setItem("token", data.token); localStorage.setItem("utilisateur", JSON.stringify(data.utilisateur)); }
+      else { setLoginErreur(data.error || "Login ou mot de passe incorrect"); }
+    } catch (err) { setLoginErreur("Erreur de connexion au serveur !"); }
     setLoadingLogin(false);
   };
 
-  const seDeconnecter = () => {
-    setToken(null);
-    setUtilisateur(null);
-    localStorage.removeItem("token");
-    localStorage.removeItem("utilisateur");
-    setPage("stock");
-  };
+  const seDeconnecter = () => { setToken(null); setUtilisateur(null); localStorage.removeItem("token"); localStorage.removeItem("utilisateur"); setPage("stock"); };
 
   const [page, setPage] = useState("stock");
   const [donnees, setDonnees] = useState([]);
@@ -83,8 +58,6 @@ function App() {
   const [produitSelectionne, setProduitSelectionne] = useState("");
   const [ficheMouvements, setFicheMouvements] = useState(null);
   const [loadingMouvements, setLoadingMouvements] = useState(false);
-
-  // ETATS FICHE DE STOCK
   const [ficheStockDateDebut, setFicheStockDateDebut] = useState("");
   const [ficheStockDateFin, setFicheStockDateFin] = useState("");
   const [ficheStockDatePrecise, setFicheStockDatePrecise] = useState("");
@@ -93,14 +66,13 @@ function App() {
   const [loadingFicheStock, setLoadingFicheStock] = useState(false);
   const [saisieDate, setSaisieDate] = useState("");
   const [saisieEditionDate, setSaisieEditionDate] = useState("");
-
-  // ETATS STOCK INITIAL
   const [stockInitialData, setStockInitialData] = useState([]);
   const [loadingStockInitial, setLoadingStockInitial] = useState(false);
   const [stockInitialEdite, setStockInitialEdite] = useState({});
   const [stockInitialSaisieDates, setStockInitialSaisieDates] = useState({});
-
-  // ETATS GESTION UTILISATEURS
+  const [stockInitialEnEdition, setStockInitialEnEdition] = useState(null);
+  const [stockInitialEditionVals, setStockInitialEditionVals] = useState({ quantite: 0, prix_unitaire: 0 });
+  const [stockInitialEditionDate, setStockInitialEditionDate] = useState("");
   const [utilisateursData, setUtilisateursData] = useState([]);
   const [loadingUtilisateurs, setLoadingUtilisateurs] = useState(false);
   const [newUtilisateur, setNewUtilisateur] = useState({ login: "", mot_de_passe: "", nom: "", role: "utilisateur" });
@@ -116,16 +88,8 @@ function App() {
       fetch(`${API}/stock`, { headers: headers() }).then((r) => r.json()),
     ]).then(([produits, clients, fournisseurs, stock]) => {
       if (produits.error || clients.error) return;
-      setStats({
-        produits: produits.length,
-        clients: clients.length,
-        fournisseurs: fournisseurs.length,
-        rupture: stock.filter((s) => Number(s.stock_actuel) <= 0).length,
-      });
-      setFournisseurs(fournisseurs);
-      setClients(clients);
-      setProduits(produits);
-      setStockData(stock);
+      setStats({ produits: produits.length, clients: clients.length, fournisseurs: fournisseurs.length, rupture: stock.filter((s) => Number(s.stock_actuel) <= 0).length });
+      setFournisseurs(fournisseurs); setClients(clients); setProduits(produits); setStockData(stock);
     });
   };
 
@@ -134,95 +98,39 @@ function App() {
   useEffect(() => {
     if (!token) return;
     if (["bon-entree", "bon-sortie", "mouvements", "fiche-stock", "stock-initial", "utilisateurs"].includes(page)) return;
-    setLoading(true);
-    setDonnees([]);
-    setRecherche("");
-    setShowForm(false);
-    setMessage("");
-    setBonDetail(null);
-    setShowEditBon(false);
-    const url = page === "liste-entree" ? `${API}/bons-entree`
-      : page === "liste-sortie" ? `${API}/bons-sortie`
-      : `${API}/${page}`;
-    fetch(url, { headers: headers() })
-      .then((res) => res.json())
-      .then((data) => { setDonnees(data); setLoading(false); })
-      .catch(() => setLoading(false));
+    setLoading(true); setDonnees([]); setRecherche(""); setShowForm(false); setMessage(""); setBonDetail(null); setShowEditBon(false);
+    const url = page === "liste-entree" ? `${API}/bons-entree` : page === "liste-sortie" ? `${API}/bons-sortie` : `${API}/${page}`;
+    fetch(url, { headers: headers() }).then((res) => res.json()).then((data) => { setDonnees(data); setLoading(false); }).catch(() => setLoading(false));
   }, [page, token]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const produitsRuptureTotale = stockData.filter((s) => Number(s.stock_actuel) <= 0);
-  const produitsStockFaible = stockData.filter((s) =>
-    Number(s.stock_actuel) > 0 && s.stock_minimum !== null &&
-    Number(s.stock_actuel) <= Number(s.stock_minimum)
-  );
+  const produitsStockFaible = stockData.filter((s) => Number(s.stock_actuel) > 0 && s.stock_minimum !== null && Number(s.stock_actuel) <= Number(s.stock_minimum));
   const totalAlertes = produitsRuptureTotale.length + produitsStockFaible.length;
+  const dataStockActuel = stockData.map((s) => ({ name: s.code_produit, designation: s.designation, "Stock Actuel": Number(s.stock_actuel), "Stock Minimum": Number(s.stock_minimum) || 0 }));
+  const dataEntreesSorties = stockData.map((s) => ({ name: s.code_produit, designation: s.designation, "Entrees": Number(s.total_entree), "Sorties": Number(s.total_sortie) }));
 
-  const dataStockActuel = stockData.map((s) => ({
-    name: s.code_produit, designation: s.designation,
-    "Stock Actuel": Number(s.stock_actuel), "Stock Minimum": Number(s.stock_minimum) || 0,
-  }));
-  const dataEntreesSorties = stockData.map((s) => ({
-    name: s.code_produit, designation: s.designation,
-    "Entrees": Number(s.total_entree), "Sorties": Number(s.total_sortie),
-  }));
-
-  const resetBon = () => {
-    setBon({ numero_bon: "", date_bon: "", id_fournisseur: "", id_client: "", observation: "" });
-    setLignes([{ id_produit: "", quantite: "", prix_unitaire: "" }]);
-    setMessage("");
-    setSaisieDate("");
-    setSaisieEditionDate("");
-  };
-
+  const resetBon = () => { setBon({ numero_bon: "", date_bon: "", id_fournisseur: "", id_client: "", observation: "" }); setLignes([{ id_produit: "", quantite: "", prix_unitaire: "" }]); setMessage(""); setSaisieDate(""); setSaisieEditionDate(""); };
   const ajouterLigne = () => setLignes([...lignes, { id_produit: "", quantite: "", prix_unitaire: "" }]);
   const supprimerLigne = (index) => setLignes(lignes.filter((_, i) => i !== index));
-  const modifierLigne = (index, champ, valeur) => {
-    const newLignes = [...lignes]; newLignes[index][champ] = valeur; setLignes(newLignes);
-  };
+  const modifierLigne = (index, champ, valeur) => { const newLignes = [...lignes]; newLignes[index][champ] = valeur; setLignes(newLignes); };
   const ajouterLigneEdition = () => setLignesEdition([...lignesEdition, { id_produit: "", quantite: "", prix_unitaire: "" }]);
   const supprimerLigneEdition = (index) => setLignesEdition(lignesEdition.filter((_, i) => i !== index));
-  const modifierLigneEdition = (index, champ, valeur) => {
-    const newLignes = [...lignesEdition]; newLignes[index][champ] = valeur; setLignesEdition(newLignes);
-  };
+  const modifierLigneEdition = (index, champ, valeur) => { const newLignes = [...lignesEdition]; newLignes[index][champ] = valeur; setLignesEdition(newLignes); };
 
-  const formatDateFR = (dateStr) => {
-    if (!dateStr || dateStr === "-") return "-";
-    const parts = dateStr.split("-");
-    if (parts.length !== 3) return dateStr;
-    return `${parts[2]}/${parts[1]}/${parts[0]}`;
-  };
-
-  const dateValide = (val) => {
-    if (!val || val.length !== 10) return false;
-    const p = val.split("/");
-    if (p.length !== 3) return false;
-    const j = parseInt(p[0]), m = parseInt(p[1]), a = parseInt(p[2]);
-    if (isNaN(j) || isNaN(m) || isNaN(a)) return false;
-    if (j < 1 || j > 31) return false;
-    if (m < 1 || m > 12) return false;
-    if (a < 1900 || a > 2100) return false;
-    const date = new Date(a, m - 1, j);
-    return date.getFullYear() === a && date.getMonth() === m - 1 && date.getDate() === j;
-  };
-
-  const parseFR = (val) => {
-    const p = val.split("/");
-    return p.length === 3 ? `${p[2]}-${p[1].padStart(2,"0")}-${p[0].padStart(2,"0")}` : val;
-  };
+  const formatDateFR = (dateStr) => { if (!dateStr || dateStr === "-") return "-"; const parts = dateStr.split("-"); if (parts.length !== 3) return dateStr; return `${parts[2]}/${parts[1]}/${parts[0]}`; };
+  const dateValide = (val) => { if (!val || val.length !== 10) return false; const p = val.split("/"); if (p.length !== 3) return false; const j = parseInt(p[0]), m = parseInt(p[1]), a = parseInt(p[2]); if (isNaN(j) || isNaN(m) || isNaN(a)) return false; if (j < 1 || j > 31) return false; if (m < 1 || m > 12) return false; if (a < 1900 || a > 2100) return false; const date = new Date(a, m - 1, j); return date.getFullYear() === a && date.getMonth() === m - 1 && date.getDate() === j; };
+  const parseFR = (val) => { const p = val.split("/"); return p.length === 3 ? `${p[2]}-${p[1].padStart(2,"0")}-${p[0].padStart(2,"0")}` : val; };
 
   const soumettreBon = async (type) => {
     if (!bon.numero_bon || !bon.date_bon) { setMessage("Champs obligatoires manquants !"); return; }
     if (!dateValide(formatDateFR(bon.date_bon))) { setMessage("Date invalide !"); return; }
     if (type === "bon-entree" && !bon.id_fournisseur) { setMessage("Choisissez un fournisseur !"); return; }
     if (type === "bon-sortie" && !bon.id_client) { setMessage("Choisissez un client !"); return; }
-    const body = type === "bon-entree"
-      ? { numero_bon: bon.numero_bon, date_bon: bon.date_bon, id_fournisseur: bon.id_fournisseur, observation: bon.observation, lignes }
-      : { numero_bon: bon.numero_bon, date_bon: bon.date_bon, id_client: bon.id_client, observation: bon.observation, lignes };
+    const body = type === "bon-entree" ? { numero_bon: bon.numero_bon, date_bon: bon.date_bon, id_fournisseur: bon.id_fournisseur, observation: bon.observation, lignes } : { numero_bon: bon.numero_bon, date_bon: bon.date_bon, id_client: bon.id_client, observation: bon.observation, lignes };
     try {
       const response = await fetch(`${API}/${type}`, { method: "POST", headers: headers(), body: JSON.stringify(body) });
       const data = await response.json();
-      if (data.success) { setMessage("Bon enregistre avec succes !"); resetBon(); chargerStats(); }
-      else { setMessage("Erreur : " + data.error); }
+      if (data.success) { setMessage("Bon enregistre avec succes !"); resetBon(); chargerStats(); } else { setMessage("Erreur : " + data.error); }
     } catch (err) { setMessage("Erreur de connexion !"); }
   };
 
@@ -276,8 +184,7 @@ function App() {
   };
 
   const ouvrirModificationBon = async (bonData, type) => {
-    setBonEnEdition({ ...bonData, _type: type });
-    setSaisieEditionDate("");
+    setBonEnEdition({ ...bonData, _type: type }); setSaisieEditionDate("");
     const url = type === "entree" ? `${API}/bons-entree/${bonData.id_bon_entree}/lignes` : `${API}/bons-sortie/${bonData.id_bon_sortie}/lignes`;
     const lignesData = await fetch(url, { headers: headers() }).then((r) => r.json());
     setLignesEdition(lignesData.map((l) => ({ id_produit: l.id_produit, quantite: l.quantite, prix_unitaire: l.prix_unitaire })));
@@ -288,9 +195,7 @@ function App() {
     const type = bonEnEdition._type;
     const id = type === "entree" ? bonEnEdition.id_bon_entree : bonEnEdition.id_bon_sortie;
     const url = type === "entree" ? `${API}/bons-entree/${id}` : `${API}/bons-sortie/${id}`;
-    const body = type === "entree"
-      ? { numero_bon: bonEnEdition.numero_bon, date_bon: bonEnEdition.date_bon, id_fournisseur: bonEnEdition.id_fournisseur, observation: bonEnEdition.observation, lignes: lignesEdition }
-      : { numero_bon: bonEnEdition.numero_bon, date_bon: bonEnEdition.date_bon, id_client: bonEnEdition.id_client, observation: bonEnEdition.observation, lignes: lignesEdition };
+    const body = type === "entree" ? { numero_bon: bonEnEdition.numero_bon, date_bon: bonEnEdition.date_bon, id_fournisseur: bonEnEdition.id_fournisseur, observation: bonEnEdition.observation, lignes: lignesEdition } : { numero_bon: bonEnEdition.numero_bon, date_bon: bonEnEdition.date_bon, id_client: bonEnEdition.id_client, observation: bonEnEdition.observation, lignes: lignesEdition };
     try {
       const response = await fetch(url, { method: "PUT", headers: headers(), body: JSON.stringify(body) });
       const data = await response.json();
@@ -326,10 +231,8 @@ function App() {
   const chargerMouvements = async () => {
     if (!produitSelectionne) return;
     setLoadingMouvements(true); setFicheMouvements(null);
-    try {
-      const data = await fetch(`${API}/mouvements/${produitSelectionne}`, { headers: headers() }).then((r) => r.json());
-      setFicheMouvements(data);
-    } catch (err) { setMessage("Erreur de chargement des mouvements !"); }
+    try { const data = await fetch(`${API}/mouvements/${produitSelectionne}`, { headers: headers() }).then((r) => r.json()); setFicheMouvements(data); }
+    catch (err) { setMessage("Erreur de chargement des mouvements !"); }
     setLoadingMouvements(false);
   };
 
@@ -338,14 +241,12 @@ function App() {
     try {
       const data = await fetch(`${API}/stock-initial`, { headers: headers() }).then((r) => r.json());
       setStockInitialData(data);
-      const edits = {};
-      const dates = {};
+      const edits = {}, dates = {};
       data.forEach((p) => {
         edits[p.id_produit] = { quantite: p.quantite || 0, prix_unitaire: p.prix_unitaire || 0 };
         dates[p.id_produit] = p.date_saisie ? formatDateFR(p.date_saisie.substring(0, 10)) : "";
       });
-      setStockInitialEdite(edits);
-      setStockInitialSaisieDates(dates);
+      setStockInitialEdite(edits); setStockInitialSaisieDates(dates);
     } catch (err) { setMessage("Erreur de chargement du stock initial !"); }
     setLoadingStockInitial(false);
   };
@@ -357,23 +258,35 @@ function App() {
     if (dateStr && !dateValide(dateStr)) { setMessage("Date invalide pour ce produit !"); return; }
     const date_saisie = dateStr && dateValide(dateStr) ? parseFR(dateStr) : null;
     try {
-      const response = await fetch(`${API}/stock-initial`, {
-        method: "POST", headers: headers(),
-        body: JSON.stringify({ id_produit, quantite: vals.quantite, prix_unitaire: vals.prix_unitaire, date_saisie }),
-      });
+      const response = await fetch(`${API}/stock-initial`, { method: "POST", headers: headers(), body: JSON.stringify({ id_produit, quantite: vals.quantite, prix_unitaire: vals.prix_unitaire, date_saisie }) });
       const data = await response.json();
       if (data.success) { setMessage("Stock initial enregistre avec succes !"); chargerStockInitial(); chargerStats(); }
       else { setMessage("Erreur : " + data.error); }
     } catch (err) { setMessage("Erreur de connexion !"); }
   };
 
-  // GESTION UTILISATEURS
+  const ouvrirModificationStockInitial = (p) => {
+    setStockInitialEnEdition(p.id_produit);
+    setStockInitialEditionVals({ quantite: p.quantite || 0, prix_unitaire: p.prix_unitaire || 0 });
+    setStockInitialEditionDate(p.date_saisie ? formatDateFR(p.date_saisie.substring(0, 10)) : "");
+  };
+
+  const enregistrerModificationStockInitial = async () => {
+    const dateStr = stockInitialEditionDate;
+    if (dateStr && !dateValide(dateStr)) { setMessage("Date invalide !"); return; }
+    const date_saisie = dateStr && dateValide(dateStr) ? parseFR(dateStr) : null;
+    try {
+      const response = await fetch(`${API}/stock-initial/${stockInitialEnEdition}`, { method: "PUT", headers: headers(), body: JSON.stringify({ quantite: stockInitialEditionVals.quantite, prix_unitaire: stockInitialEditionVals.prix_unitaire, date_saisie }) });
+      const data = await response.json();
+      if (data.success) { setMessage("Stock initial modifie avec succes !"); setStockInitialEnEdition(null); chargerStockInitial(); chargerStats(); }
+      else { setMessage("Erreur : " + data.error); }
+    } catch (err) { setMessage("Erreur de connexion !"); }
+  };
+
   const chargerUtilisateurs = async () => {
     setLoadingUtilisateurs(true);
-    try {
-      const data = await fetch(`${API}/utilisateurs`, { headers: headers() }).then((r) => r.json());
-      setUtilisateursData(data);
-    } catch (err) { setMessage("Erreur de chargement des utilisateurs !"); }
+    try { const data = await fetch(`${API}/utilisateurs`, { headers: headers() }).then((r) => r.json()); setUtilisateursData(data); }
+    catch (err) { setMessage("Erreur de chargement des utilisateurs !"); }
     setLoadingUtilisateurs(false);
   };
 
@@ -382,11 +295,8 @@ function App() {
     try {
       const response = await fetch(`${API}/utilisateurs`, { method: "POST", headers: headers(), body: JSON.stringify(newUtilisateur) });
       const data = await response.json();
-      if (data.success) {
-        setMessage("Utilisateur cree avec succes !"); setShowFormUtilisateur(false);
-        setNewUtilisateur({ login: "", mot_de_passe: "", nom: "", role: "utilisateur" });
-        chargerUtilisateurs();
-      } else { setMessage("Erreur : " + data.error); }
+      if (data.success) { setMessage("Utilisateur cree avec succes !"); setShowFormUtilisateur(false); setNewUtilisateur({ login: "", mot_de_passe: "", nom: "", role: "utilisateur" }); chargerUtilisateurs(); }
+      else { setMessage("Erreur : " + data.error); }
     } catch (err) { setMessage("Erreur de connexion !"); }
   };
 
@@ -394,9 +304,8 @@ function App() {
     try {
       const response = await fetch(`${API}/utilisateurs/${utilisateurAModifier.id_utilisateur}`, { method: "PUT", headers: headers(), body: JSON.stringify(utilisateurAModifier) });
       const data = await response.json();
-      if (data.success) {
-        setMessage("Utilisateur modifie avec succes !"); setUtilisateurAModifier(null); chargerUtilisateurs();
-      } else { setMessage("Erreur : " + data.error); }
+      if (data.success) { setMessage("Utilisateur modifie avec succes !"); setUtilisateurAModifier(null); chargerUtilisateurs(); }
+      else { setMessage("Erreur : " + data.error); }
     } catch (err) { setMessage("Erreur de connexion !"); }
   };
 
@@ -435,24 +344,14 @@ function App() {
 
   const imprimerFicheStockPDF = () => {
     if (!ficheStockData) return;
-    const doc = new jsPDF();
-    const couleur = [13, 110, 253];
+    const doc = new jsPDF(); const couleur = [13, 110, 253];
     doc.setFillColor(...couleur); doc.rect(0, 0, 210, 30, "F");
     doc.setTextColor(255, 255, 255); doc.setFontSize(20); doc.setFont("helvetica", "bold");
-    doc.text("GESTION DE STOCK", 105, 13, { align: "center" });
-    doc.setFontSize(13); doc.text("FICHE DE STOCK", 105, 23, { align: "center" });
+    doc.text("GESTION DE STOCK", 105, 13, { align: "center" }); doc.setFontSize(13); doc.text("FICHE DE STOCK", 105, 23, { align: "center" });
     doc.setTextColor(0, 0, 0); doc.setFontSize(11); doc.setFont("helvetica", "bold");
-    if (ficheStockData.dateDebut === ficheStockData.dateFin) { doc.text(`Date : ${ficheStockData.dateDebut}`, 15, 42); }
-    else { doc.text(`Periode : du ${ficheStockData.dateDebut} au ${ficheStockData.dateFin}`, 15, 42); }
+    if (ficheStockData.dateDebut === ficheStockData.dateFin) { doc.text(`Date : ${ficheStockData.dateDebut}`, 15, 42); } else { doc.text(`Periode : du ${ficheStockData.dateDebut} au ${ficheStockData.dateFin}`, 15, 42); }
     doc.setDrawColor(...couleur); doc.setLineWidth(0.5); doc.line(15, 48, 195, 48);
-    autoTable(doc, {
-      startY: 53,
-      head: [["Code", "Designation", "Unite", "Stock Initial", "Total Entrees", "Total Sorties", "Stock Disponible"]],
-      body: ficheStockData.lignes.map((l) => [l.code_produit, l.designation, l.unite, Number(l.stock_initial).toFixed(2), Number(l.total_entrees).toFixed(2), Number(l.total_sorties).toFixed(2), Number(l.stock_disponible).toFixed(2)]),
-      headStyles: { fillColor: couleur, textColor: 255, fontStyle: "bold" },
-      alternateRowStyles: { fillColor: [249, 249, 249] }, styles: { fontSize: 9, cellPadding: 3 },
-      columnStyles: { 0: { cellWidth: 20 }, 1: { cellWidth: 55 }, 2: { cellWidth: 18 }, 3: { cellWidth: 23, halign: "right" }, 4: { cellWidth: 23, halign: "right" }, 5: { cellWidth: 23, halign: "right" }, 6: { cellWidth: 28, halign: "right" } },
-    });
+    autoTable(doc, { startY: 53, head: [["Code", "Designation", "Unite", "Stock Initial", "Total Entrees", "Total Sorties", "Stock Disponible"]], body: ficheStockData.lignes.map((l) => [l.code_produit, l.designation, l.unite, Number(l.stock_initial).toFixed(2), Number(l.total_entrees).toFixed(2), Number(l.total_sorties).toFixed(2), Number(l.stock_disponible).toFixed(2)]), headStyles: { fillColor: couleur, textColor: 255, fontStyle: "bold" }, alternateRowStyles: { fillColor: [249, 249, 249] }, styles: { fontSize: 9, cellPadding: 3 }, columnStyles: { 0: { cellWidth: 20 }, 1: { cellWidth: 55 }, 2: { cellWidth: 18 }, 3: { cellWidth: 23, halign: "right" }, 4: { cellWidth: 23, halign: "right" }, 5: { cellWidth: 23, halign: "right" }, 6: { cellWidth: 28, halign: "right" } } });
     const pageHeight = doc.internal.pageSize.height;
     doc.setFontSize(9); doc.setTextColor(150, 150, 150);
     doc.text(`Document genere le ${new Date().toLocaleDateString("fr-FR")} a ${new Date().toLocaleTimeString("fr-FR")}`, 105, pageHeight - 10, { align: "center" });
@@ -467,52 +366,28 @@ function App() {
     const mouvements = [...entrees.map((e) => ({ ...e, _type: "entree" })), ...sorties.map((s) => ({ ...s, _type: "sortie" }))].sort((a, b) => new Date(a.date_bon) - new Date(b.date_bon));
     let stockCourant = Number(stock_initial.quantite) || 0;
     mouvements.forEach((m) => {
-      if (m._type === "entree") {
-        stockCourant += Number(m.quantite);
-        lignesMouvements.push({ date: formatDateFR(m.date_bon.substring(0, 10)), numero_bon: m.numero_bon, type: "Entree", tiers: m.nom_fournisseur, entree: Number(m.quantite), sortie: "-", stock: stockCourant, _classe: "table-success" });
-      } else {
-        stockCourant -= Number(m.quantite);
-        lignesMouvements.push({ date: formatDateFR(m.date_bon.substring(0, 10)), numero_bon: m.numero_bon, type: "Sortie", tiers: m.nom_client, entree: "-", sortie: Number(m.quantite), stock: stockCourant, _classe: "table-danger" });
-      }
+      if (m._type === "entree") { stockCourant += Number(m.quantite); lignesMouvements.push({ date: formatDateFR(m.date_bon.substring(0, 10)), numero_bon: m.numero_bon, type: "Entree", tiers: m.nom_fournisseur, entree: Number(m.quantite), sortie: "-", stock: stockCourant, _classe: "table-success" }); }
+      else { stockCourant -= Number(m.quantite); lignesMouvements.push({ date: formatDateFR(m.date_bon.substring(0, 10)), numero_bon: m.numero_bon, type: "Sortie", tiers: m.nom_client, entree: "-", sortie: Number(m.quantite), stock: stockCourant, _classe: "table-danger" }); }
     });
     return lignesMouvements;
   };
 
   const imprimerMouvementsPDF = () => {
     if (!ficheMouvements) return;
-    const { produit, totaux } = ficheMouvements;
-    const tableauLignes = construireTableauMouvements();
-    const doc = new jsPDF({ orientation: "landscape" });
-    const couleur = [13, 110, 253];
+    const { produit, totaux } = ficheMouvements; const tableauLignes = construireTableauMouvements();
+    const doc = new jsPDF({ orientation: "landscape" }); const couleur = [13, 110, 253];
     doc.setFillColor(...couleur); doc.rect(0, 0, 297, 25, "F");
     doc.setTextColor(255, 255, 255); doc.setFontSize(16); doc.setFont("helvetica", "bold");
-    doc.text("GESTION DE STOCK", 148, 10, { align: "center" });
-    doc.setFontSize(12); doc.text("FICHE DE MOUVEMENTS", 148, 20, { align: "center" });
+    doc.text("GESTION DE STOCK", 148, 10, { align: "center" }); doc.setFontSize(12); doc.text("FICHE DE MOUVEMENTS", 148, 20, { align: "center" });
     doc.setTextColor(0, 0, 0); doc.setFontSize(10); doc.setFont("helvetica", "bold");
-    doc.text(`Code : ${produit.code_produit}`, 15, 35); doc.text(`Designation : ${produit.designation}`, 60, 35);
-    doc.text(`Unite : ${produit.unite}`, 150, 35); doc.text(`Prix Achat : ${produit.prix_achat} MRU`, 185, 35); doc.text(`Prix Vente : ${produit.prix_vente} MRU`, 237, 35);
+    doc.text(`Code : ${produit.code_produit}`, 15, 35); doc.text(`Designation : ${produit.designation}`, 60, 35); doc.text(`Unite : ${produit.unite}`, 150, 35); doc.text(`Prix Achat : ${produit.prix_achat} MRU`, 185, 35); doc.text(`Prix Vente : ${produit.prix_vente} MRU`, 237, 35);
     doc.setDrawColor(...couleur); doc.setLineWidth(0.5); doc.line(15, 40, 282, 40);
-    autoTable(doc, {
-      startY: 45,
-      head: [["Date", "N° Bon", "Type", "Fournisseur / Client", "Entree", "Sortie", "Stock"]],
-      body: tableauLignes.map((l) => [l.date, l.numero_bon, l.type, l.tiers, l.entree !== "-" ? l.entree : "", l.sortie !== "-" ? l.sortie : "", l.stock]),
-      foot: [["", "", "", "TOTAUX :", totaux.total_entrees, totaux.total_sorties, totaux.stock_final]],
-      headStyles: { fillColor: couleur, textColor: 255, fontStyle: "bold" }, footStyles: { fillColor: [40, 40, 40], textColor: 255, fontStyle: "bold" },
-      alternateRowStyles: { fillColor: [249, 249, 249] }, styles: { fontSize: 9, cellPadding: 3 },
-      columnStyles: { 0: { cellWidth: 25 }, 1: { cellWidth: 25 }, 2: { cellWidth: 25 }, 3: { cellWidth: 90 }, 4: { cellWidth: 25, halign: "center" }, 5: { cellWidth: 25, halign: "center" }, 6: { cellWidth: 25, halign: "center" } },
-      didParseCell: (data) => { if (data.section === "body") { const type = tableauLignes[data.row.index]?.type; if (type === "Stock Initial") data.cell.styles.fillColor = [217, 237, 247]; else if (type === "Entree") data.cell.styles.fillColor = [212, 237, 218]; else if (type === "Sortie") data.cell.styles.fillColor = [248, 215, 218]; } },
-    });
+    autoTable(doc, { startY: 45, head: [["Date", "N° Bon", "Type", "Fournisseur / Client", "Entree", "Sortie", "Stock"]], body: tableauLignes.map((l) => [l.date, l.numero_bon, l.type, l.tiers, l.entree !== "-" ? l.entree : "", l.sortie !== "-" ? l.sortie : "", l.stock]), foot: [["", "", "", "TOTAUX :", totaux.total_entrees, totaux.total_sorties, totaux.stock_final]], headStyles: { fillColor: couleur, textColor: 255, fontStyle: "bold" }, footStyles: { fillColor: [40, 40, 40], textColor: 255, fontStyle: "bold" }, alternateRowStyles: { fillColor: [249, 249, 249] }, styles: { fontSize: 9, cellPadding: 3 }, columnStyles: { 0: { cellWidth: 25 }, 1: { cellWidth: 25 }, 2: { cellWidth: 25 }, 3: { cellWidth: 90 }, 4: { cellWidth: 25, halign: "center" }, 5: { cellWidth: 25, halign: "center" }, 6: { cellWidth: 25, halign: "center" } }, didParseCell: (data) => { if (data.section === "body") { const type = tableauLignes[data.row.index]?.type; if (type === "Stock Initial") data.cell.styles.fillColor = [217, 237, 247]; else if (type === "Entree") data.cell.styles.fillColor = [212, 237, 218]; else if (type === "Sortie") data.cell.styles.fillColor = [248, 215, 218]; } } });
     const finalY = doc.lastAutoTable.finalY + 8;
     doc.setFontSize(10); doc.setFont("helvetica", "bold");
-    doc.setFillColor(23, 162, 184); doc.rect(15, finalY, 55, 12, "F");
-    doc.setFillColor(25, 135, 84); doc.rect(75, finalY, 55, 12, "F");
-    doc.setFillColor(220, 53, 69); doc.rect(135, finalY, 55, 12, "F");
-    doc.setFillColor(13, 110, 253); doc.rect(195, finalY, 55, 12, "F");
+    doc.setFillColor(23, 162, 184); doc.rect(15, finalY, 55, 12, "F"); doc.setFillColor(25, 135, 84); doc.rect(75, finalY, 55, 12, "F"); doc.setFillColor(220, 53, 69); doc.rect(135, finalY, 55, 12, "F"); doc.setFillColor(13, 110, 253); doc.rect(195, finalY, 55, 12, "F");
     doc.setTextColor(255, 255, 255);
-    doc.text(`Stock Initial: ${totaux.qte_initiale}`, 42, finalY + 8, { align: "center" });
-    doc.text(`Total Entrees: +${totaux.total_entrees}`, 102, finalY + 8, { align: "center" });
-    doc.text(`Total Sorties: -${totaux.total_sorties}`, 162, finalY + 8, { align: "center" });
-    doc.text(`Stock Final: ${totaux.stock_final}`, 222, finalY + 8, { align: "center" });
+    doc.text(`Stock Initial: ${totaux.qte_initiale}`, 42, finalY + 8, { align: "center" }); doc.text(`Total Entrees: +${totaux.total_entrees}`, 102, finalY + 8, { align: "center" }); doc.text(`Total Sorties: -${totaux.total_sorties}`, 162, finalY + 8, { align: "center" }); doc.text(`Stock Final: ${totaux.stock_final}`, 222, finalY + 8, { align: "center" });
     const pageHeight = doc.internal.pageSize.height;
     doc.setFontSize(8); doc.setTextColor(150, 150, 150); doc.setFont("helvetica", "normal");
     doc.text(`Document genere le ${new Date().toLocaleDateString("fr-FR")} a ${new Date().toLocaleTimeString("fr-FR")}`, 148, pageHeight - 8, { align: "center" });
@@ -520,139 +395,74 @@ function App() {
   };
 
   const imprimerBonPDF = (type) => {
-    const doc = new jsPDF();
-    const estEntree = type === "entree";
-    const titre = estEntree ? "BON D'ENTREE" : "BON DE SORTIE";
-    const couleur = estEntree ? [13, 110, 253] : [25, 135, 84];
+    const doc = new jsPDF(); const estEntree = type === "entree"; const titre = estEntree ? "BON D'ENTREE" : "BON DE SORTIE"; const couleur = estEntree ? [13, 110, 253] : [25, 135, 84];
     doc.setFillColor(...couleur); doc.rect(0, 0, 210, 30, "F");
     doc.setTextColor(255, 255, 255); doc.setFontSize(20); doc.setFont("helvetica", "bold");
-    doc.text("GESTION DE STOCK", 105, 13, { align: "center" });
-    doc.setFontSize(13); doc.text(titre, 105, 23, { align: "center" });
+    doc.text("GESTION DE STOCK", 105, 13, { align: "center" }); doc.setFontSize(13); doc.text(titre, 105, 23, { align: "center" });
     doc.setTextColor(0, 0, 0); doc.setFontSize(11); doc.setFont("helvetica", "bold");
-    doc.text("Numero du Bon :", 15, 42); doc.text("Date :", 15, 52);
-    doc.text(estEntree ? "Fournisseur :" : "Client :", 15, 62); doc.text("Observation :", 15, 72);
+    doc.text("Numero du Bon :", 15, 42); doc.text("Date :", 15, 52); doc.text(estEntree ? "Fournisseur :" : "Client :", 15, 62); doc.text("Observation :", 15, 72);
     doc.setFont("helvetica", "normal");
-    doc.text(bonDetail.numero_bon || "-", 60, 42);
-    doc.text(formatDateFR(bonDetail.date_bon?.substring(0, 10)) || "-", 60, 52);
-    doc.text(estEntree ? (bonDetail.nom_fournisseur || "-") : (bonDetail.nom_client || "-"), 60, 62);
-    doc.text(bonDetail.observation || "-", 60, 72);
+    doc.text(bonDetail.numero_bon || "-", 60, 42); doc.text(formatDateFR(bonDetail.date_bon?.substring(0, 10)) || "-", 60, 52);
+    doc.text(estEntree ? (bonDetail.nom_fournisseur || "-") : (bonDetail.nom_client || "-"), 60, 62); doc.text(bonDetail.observation || "-", 60, 72);
     doc.setDrawColor(...couleur); doc.setLineWidth(0.5); doc.line(15, 78, 195, 78);
     const formatMontant = (val) => Number(val).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
     const totalGeneral = lignesDetail.reduce((sum, l) => sum + Number(l.montant || 0), 0);
-    autoTable(doc, {
-      startY: 83,
-      head: [["Code", "Designation", "Quantite", "Prix Unitaire", "Montant (MRU)"]],
-      body: lignesDetail.map((l) => [l.code_produit || "-", l.designation || "-", l.quantite, formatMontant(l.prix_unitaire), formatMontant(l.montant)]),
-      foot: [["", "", "", "TOTAL GENERAL :", formatMontant(totalGeneral) + " MRU"]],
-      headStyles: { fillColor: couleur, textColor: 255, fontStyle: "bold" }, footStyles: { fillColor: [240, 240, 240], textColor: 0, fontStyle: "bold" },
-      alternateRowStyles: { fillColor: [249, 249, 249] }, styles: { fontSize: 10, cellPadding: 4 },
-      columnStyles: { 0: { cellWidth: 25 }, 1: { cellWidth: 70 }, 2: { cellWidth: 25, halign: "center" }, 3: { cellWidth: 35, halign: "right" }, 4: { cellWidth: 35, halign: "right" } },
-    });
+    autoTable(doc, { startY: 83, head: [["Code", "Designation", "Quantite", "Prix Unitaire", "Montant (MRU)"]], body: lignesDetail.map((l) => [l.code_produit || "-", l.designation || "-", l.quantite, formatMontant(l.prix_unitaire), formatMontant(l.montant)]), foot: [["", "", "", "TOTAL GENERAL :", formatMontant(totalGeneral) + " MRU"]], headStyles: { fillColor: couleur, textColor: 255, fontStyle: "bold" }, footStyles: { fillColor: [240, 240, 240], textColor: 0, fontStyle: "bold" }, alternateRowStyles: { fillColor: [249, 249, 249] }, styles: { fontSize: 10, cellPadding: 4 }, columnStyles: { 0: { cellWidth: 25 }, 1: { cellWidth: 70 }, 2: { cellWidth: 25, halign: "center" }, 3: { cellWidth: 35, halign: "right" }, 4: { cellWidth: 35, halign: "right" } } });
     const pageHeight = doc.internal.pageSize.height;
     doc.setFontSize(9); doc.setTextColor(150, 150, 150);
     doc.text(`Document genere le ${new Date().toLocaleDateString("fr-FR")} a ${new Date().toLocaleTimeString("fr-FR")}`, 105, pageHeight - 10, { align: "center" });
     doc.save(`${titre.replace(" ", "_")}_${bonDetail.numero_bon}.pdf`);
   };
 
-  // PAGE LOGIN
   const renderLogin = () => (
     <div className="min-vh-100 d-flex align-items-center justify-content-center bg-light">
       <div className="card shadow" style={{ width: "400px" }}>
-        <div className="card-header bg-primary text-white text-center py-4">
-          <h3 className="mb-0">📦 Gestion de Stock</h3>
-          <small>Connectez-vous pour acceder</small>
-        </div>
+        <div className="card-header bg-primary text-white text-center py-4"><h3 className="mb-0">📦 Gestion de Stock</h3><small>Connectez-vous pour acceder</small></div>
         <div className="card-body p-4">
           {loginErreur && <div className="alert alert-danger">{loginErreur}</div>}
-          <div className="mb-3">
-            <label className="form-label fw-bold">Login</label>
-            <input type="text" className="form-control" placeholder="Votre login"
-              value={loginForm.login}
-              onChange={(e) => setLoginForm({ ...loginForm, login: e.target.value })}
-              onKeyDown={(e) => e.key === "Enter" && seConnecter()} />
-          </div>
-          <div className="mb-4">
-            <label className="form-label fw-bold">Mot de passe</label>
-            <input type="password" className="form-control" placeholder="Votre mot de passe"
-              value={loginForm.mot_de_passe}
-              onChange={(e) => setLoginForm({ ...loginForm, mot_de_passe: e.target.value })}
-              onKeyDown={(e) => e.key === "Enter" && seConnecter()} />
-          </div>
-          <button className="btn btn-primary w-100 btn-lg" onClick={seConnecter} disabled={loadingLogin}>
-            {loadingLogin ? <><span className="spinner-border spinner-border-sm me-2"></span>Connexion...</> : "🔐 Se Connecter"}
-          </button>
+          <div className="mb-3"><label className="form-label fw-bold">Login</label><input type="text" className="form-control" placeholder="Votre login" value={loginForm.login} onChange={(e) => setLoginForm({ ...loginForm, login: e.target.value })} onKeyDown={(e) => e.key === "Enter" && seConnecter()} /></div>
+          <div className="mb-4"><label className="form-label fw-bold">Mot de passe</label><input type="password" className="form-control" placeholder="Votre mot de passe" value={loginForm.mot_de_passe} onChange={(e) => setLoginForm({ ...loginForm, mot_de_passe: e.target.value })} onKeyDown={(e) => e.key === "Enter" && seConnecter()} /></div>
+          <button className="btn btn-primary w-100 btn-lg" onClick={seConnecter} disabled={loadingLogin}>{loadingLogin ? <><span className="spinner-border spinner-border-sm me-2"></span>Connexion...</> : "🔐 Se Connecter"}</button>
         </div>
       </div>
     </div>
   );
 
-  // PAGE GESTION UTILISATEURS
   const renderUtilisateurs = () => (
     <div>
       <h4 className="mb-4">👥 Gestion des Utilisateurs</h4>
       {message && (<div className={`alert ${message.includes("succes") ? "alert-success" : "alert-danger"} alert-dismissible`}>{message}<button className="btn-close" onClick={() => setMessage("")}></button></div>)}
-      <button className="btn btn-success mb-3" onClick={() => setShowFormUtilisateur(!showFormUtilisateur)}>
-        {showFormUtilisateur ? "Annuler" : "+ Nouvel Utilisateur"}
-      </button>
+      <button className="btn btn-success mb-3" onClick={() => setShowFormUtilisateur(!showFormUtilisateur)}>{showFormUtilisateur ? "Annuler" : "+ Nouvel Utilisateur"}</button>
       {showFormUtilisateur && (
-        <div className="card p-3 mb-3 border-success">
-          <h5 className="mb-3">Nouvel Utilisateur</h5>
+        <div className="card p-3 mb-3 border-success"><h5 className="mb-3">Nouvel Utilisateur</h5>
           <div className="row g-2">
             <div className="col-md-3"><input className="form-control" placeholder="Login *" value={newUtilisateur.login} onChange={(e) => setNewUtilisateur({ ...newUtilisateur, login: e.target.value })} /></div>
             <div className="col-md-3"><input className="form-control" placeholder="Nom complet *" value={newUtilisateur.nom} onChange={(e) => setNewUtilisateur({ ...newUtilisateur, nom: e.target.value })} /></div>
             <div className="col-md-3"><input type="password" className="form-control" placeholder="Mot de passe *" value={newUtilisateur.mot_de_passe} onChange={(e) => setNewUtilisateur({ ...newUtilisateur, mot_de_passe: e.target.value })} /></div>
-            <div className="col-md-3">
-              <select className="form-select" value={newUtilisateur.role} onChange={(e) => setNewUtilisateur({ ...newUtilisateur, role: e.target.value })}>
-                <option value="utilisateur">Utilisateur</option>
-                <option value="admin">Admin</option>
-              </select>
-            </div>
+            <div className="col-md-3"><select className="form-select" value={newUtilisateur.role} onChange={(e) => setNewUtilisateur({ ...newUtilisateur, role: e.target.value })}><option value="utilisateur">Utilisateur</option><option value="admin">Admin</option></select></div>
           </div>
           <div className="mt-2"><button className="btn btn-success me-2" onClick={ajouterUtilisateur}>Enregistrer</button><button className="btn btn-secondary" onClick={() => setShowFormUtilisateur(false)}>Annuler</button></div>
         </div>
       )}
       {loadingUtilisateurs ? (<div className="text-center"><div className="spinner-border text-primary"></div></div>) : (
         <table className="table table-bordered table-hover">
-          <thead className="table-dark">
-            <tr><th>Login</th><th>Nom</th><th>Role</th><th>Statut</th><th>Actions</th></tr>
-          </thead>
-          <tbody>
-            {utilisateursData.map((u) => (
-              <tr key={u.id_utilisateur}>
-                <td>{u.login}</td>
-                <td>{u.nom}</td>
-                <td><span className={`badge ${u.role === "admin" ? "bg-danger" : "bg-primary"}`}>{u.role === "admin" ? "👑 Admin" : "👤 Utilisateur"}</span></td>
-                <td><span className={`badge ${u.actif ? "bg-success" : "bg-secondary"}`}>{u.actif ? "Actif" : "Inactif"}</span></td>
-                <td>
-                  <button className="btn btn-warning btn-sm me-2" onClick={() => setUtilisateurAModifier({ ...u, mot_de_passe: "" })}>✏️ Modifier</button>
-                  {u.login !== "admin" && <button className="btn btn-danger btn-sm" onClick={() => supprimerUtilisateur(u.id_utilisateur)}>🗑️ Supprimer</button>}
-                </td>
-              </tr>
-            ))}
-          </tbody>
+          <thead className="table-dark"><tr><th>Login</th><th>Nom</th><th>Role</th><th>Statut</th><th>Actions</th></tr></thead>
+          <tbody>{utilisateursData.map((u) => (<tr key={u.id_utilisateur}><td>{u.login}</td><td>{u.nom}</td><td><span className={`badge ${u.role === "admin" ? "bg-danger" : "bg-primary"}`}>{u.role === "admin" ? "👑 Admin" : "👤 Utilisateur"}</span></td><td><span className={`badge ${u.actif ? "bg-success" : "bg-secondary"}`}>{u.actif ? "Actif" : "Inactif"}</span></td><td><button className="btn btn-warning btn-sm me-2" onClick={() => setUtilisateurAModifier({ ...u, mot_de_passe: "" })}>✏️ Modifier</button>{u.login !== "admin" && <button className="btn btn-danger btn-sm" onClick={() => supprimerUtilisateur(u.id_utilisateur)}>🗑️ Supprimer</button>}</td></tr>))}</tbody>
         </table>
       )}
       {utilisateurAModifier && (
         <div className="modal show d-block" style={{ backgroundColor: "rgba(0,0,0,0.5)" }}>
-          <div className="modal-dialog">
-            <div className="modal-content">
-              <div className="modal-header bg-warning">
-                <h5 className="modal-title">✏️ Modifier Utilisateur</h5>
-                <button className="btn-close" onClick={() => setUtilisateurAModifier(null)}></button>
-              </div>
-              <div className="modal-body">
-                <div className="mb-3"><label className="form-label">Login</label><input className="form-control" value={utilisateurAModifier.login} onChange={(e) => setUtilisateurAModifier({ ...utilisateurAModifier, login: e.target.value })} /></div>
-                <div className="mb-3"><label className="form-label">Nom</label><input className="form-control" value={utilisateurAModifier.nom} onChange={(e) => setUtilisateurAModifier({ ...utilisateurAModifier, nom: e.target.value })} /></div>
-                <div className="mb-3"><label className="form-label">Nouveau mot de passe (laisser vide pour ne pas changer)</label><input type="password" className="form-control" value={utilisateurAModifier.mot_de_passe} onChange={(e) => setUtilisateurAModifier({ ...utilisateurAModifier, mot_de_passe: e.target.value })} /></div>
-                <div className="mb-3"><label className="form-label">Role</label><select className="form-select" value={utilisateurAModifier.role} onChange={(e) => setUtilisateurAModifier({ ...utilisateurAModifier, role: e.target.value })}><option value="utilisateur">Utilisateur</option><option value="admin">Admin</option></select></div>
-                <div className="mb-3"><label className="form-label">Statut</label><select className="form-select" value={utilisateurAModifier.actif} onChange={(e) => setUtilisateurAModifier({ ...utilisateurAModifier, actif: e.target.value === "true" })}><option value="true">Actif</option><option value="false">Inactif</option></select></div>
-              </div>
-              <div className="modal-footer">
-                <button className="btn btn-secondary" onClick={() => setUtilisateurAModifier(null)}>Annuler</button>
-                <button className="btn btn-warning" onClick={modifierUtilisateur}>💾 Enregistrer</button>
-              </div>
+          <div className="modal-dialog"><div className="modal-content">
+            <div className="modal-header bg-warning"><h5 className="modal-title">✏️ Modifier Utilisateur</h5><button className="btn-close" onClick={() => setUtilisateurAModifier(null)}></button></div>
+            <div className="modal-body">
+              <div className="mb-3"><label className="form-label">Login</label><input className="form-control" value={utilisateurAModifier.login} onChange={(e) => setUtilisateurAModifier({ ...utilisateurAModifier, login: e.target.value })} /></div>
+              <div className="mb-3"><label className="form-label">Nom</label><input className="form-control" value={utilisateurAModifier.nom} onChange={(e) => setUtilisateurAModifier({ ...utilisateurAModifier, nom: e.target.value })} /></div>
+              <div className="mb-3"><label className="form-label">Nouveau mot de passe (laisser vide pour ne pas changer)</label><input type="password" className="form-control" value={utilisateurAModifier.mot_de_passe} onChange={(e) => setUtilisateurAModifier({ ...utilisateurAModifier, mot_de_passe: e.target.value })} /></div>
+              <div className="mb-3"><label className="form-label">Role</label><select className="form-select" value={utilisateurAModifier.role} onChange={(e) => setUtilisateurAModifier({ ...utilisateurAModifier, role: e.target.value })}><option value="utilisateur">Utilisateur</option><option value="admin">Admin</option></select></div>
+              <div className="mb-3"><label className="form-label">Statut</label><select className="form-select" value={utilisateurAModifier.actif} onChange={(e) => setUtilisateurAModifier({ ...utilisateurAModifier, actif: e.target.value === "true" })}><option value="true">Actif</option><option value="false">Inactif</option></select></div>
             </div>
-          </div>
+            <div className="modal-footer"><button className="btn btn-secondary" onClick={() => setUtilisateurAModifier(null)}>Annuler</button><button className="btn btn-warning" onClick={modifierUtilisateur}>💾 Enregistrer</button></div>
+          </div></div>
         </div>
       )}
     </div>
@@ -676,11 +486,32 @@ function App() {
                   <td className="text-center"><input type="number" className="form-control form-control-sm text-center" min="0" style={{ width: "100px", margin: "auto" }} value={stockInitialEdite[p.id_produit]?.quantite || 0} onChange={(e) => setStockInitialEdite({ ...stockInitialEdite, [p.id_produit]: { ...stockInitialEdite[p.id_produit], quantite: e.target.value } })} /></td>
                   <td className="text-center"><input type="number" className="form-control form-control-sm text-center" min="0" style={{ width: "120px", margin: "auto" }} value={stockInitialEdite[p.id_produit]?.prix_unitaire || 0} onChange={(e) => setStockInitialEdite({ ...stockInitialEdite, [p.id_produit]: { ...stockInitialEdite[p.id_produit], prix_unitaire: e.target.value } })} /></td>
                   <td className="text-center"><input type="text" placeholder="jj/mm/aaaa" maxLength={10} className={`form-control form-control-sm text-center ${stockInitialSaisieDates[p.id_produit] && !dateValide(stockInitialSaisieDates[p.id_produit]) ? "is-invalid" : stockInitialSaisieDates[p.id_produit] && dateValide(stockInitialSaisieDates[p.id_produit]) ? "is-valid" : ""}`} style={{ width: "130px", margin: "auto" }} value={stockInitialSaisieDates[p.id_produit] || ""} onChange={(e) => setStockInitialSaisieDates({ ...stockInitialSaisieDates, [p.id_produit]: e.target.value })} /></td>
-                  <td className="text-center"><button className="btn btn-success btn-sm" onClick={() => enregistrerStockInitial(p.id_produit)}>💾 Enregistrer</button></td>
+                  <td className="text-center">
+                    <button className="btn btn-success btn-sm me-1" onClick={() => enregistrerStockInitial(p.id_produit)}>💾 Enregistrer</button>
+                    <button className="btn btn-warning btn-sm" onClick={() => ouvrirModificationStockInitial(p)}>✏️ Modifier</button>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {stockInitialEnEdition && (
+        <div className="modal show d-block" style={{ backgroundColor: "rgba(0,0,0,0.5)" }}>
+          <div className="modal-dialog"><div className="modal-content">
+            <div className="modal-header bg-warning"><h5 className="modal-title">✏️ Modifier Stock Initial — {stockInitialData.find(p => p.id_produit === stockInitialEnEdition)?.designation}</h5><button className="btn-close" onClick={() => setStockInitialEnEdition(null)}></button></div>
+            <div className="modal-body">
+              <div className="mb-3"><label className="form-label fw-bold">Quantite Initiale</label><input type="number" min="0" className="form-control" value={stockInitialEditionVals.quantite} onChange={(e) => setStockInitialEditionVals({ ...stockInitialEditionVals, quantite: e.target.value })} /></div>
+              <div className="mb-3"><label className="form-label fw-bold">Prix Unitaire (MRU)</label><input type="number" min="0" className="form-control" value={stockInitialEditionVals.prix_unitaire} onChange={(e) => setStockInitialEditionVals({ ...stockInitialEditionVals, prix_unitaire: e.target.value })} /></div>
+              <div className="mb-3">
+                <label className="form-label fw-bold">Date Saisie (jj/mm/aaaa)</label>
+                <input type="text" placeholder="jj/mm/aaaa" maxLength={10} className={`form-control ${stockInitialEditionDate && !dateValide(stockInitialEditionDate) ? "is-invalid" : stockInitialEditionDate && dateValide(stockInitialEditionDate) ? "is-valid" : ""}`} value={stockInitialEditionDate} onChange={(e) => setStockInitialEditionDate(e.target.value)} />
+                {stockInitialEditionDate && !dateValide(stockInitialEditionDate) && <div className="invalid-feedback">Date invalide (ex: 01/01/2026)</div>}
+              </div>
+            </div>
+            <div className="modal-footer"><button className="btn btn-secondary" onClick={() => setStockInitialEnEdition(null)}>Annuler</button><button className="btn btn-warning" onClick={enregistrerModificationStockInitial}>💾 Enregistrer</button></div>
+          </div></div>
         </div>
       )}
     </div>
@@ -691,33 +522,13 @@ function App() {
       <h4 className="mb-4">📊 Fiche de Stock</h4>
       <div className="card p-3 mb-4">
         <div className="row g-3 align-items-end">
-          <div className="col-md-3">
-            <label className="form-label fw-bold">Mode de filtre</label>
-            <select className="form-select" value={ficheStockMode} onChange={(e) => { setFicheStockMode(e.target.value); setFicheStockData(null); }}>
-              <option value="periode">Periode (date debut → date fin)</option>
-              <option value="date">Date precise</option>
-            </select>
-          </div>
+          <div className="col-md-3"><label className="form-label fw-bold">Mode de filtre</label><select className="form-select" value={ficheStockMode} onChange={(e) => { setFicheStockMode(e.target.value); setFicheStockData(null); }}><option value="periode">Periode (date debut → date fin)</option><option value="date">Date precise</option></select></div>
           {ficheStockMode === "date" ? (
-            <div className="col-md-3">
-              <label className="form-label fw-bold">Date (jj/mm/aaaa)</label>
-              <input type="text" className={`form-control ${ficheStockDatePrecise && !dateValide(ficheStockDatePrecise) ? "is-invalid" : ficheStockDatePrecise && dateValide(ficheStockDatePrecise) ? "is-valid" : ""}`} placeholder="jj/mm/aaaa" maxLength={10} value={ficheStockDatePrecise} onChange={(e) => { setFicheStockDatePrecise(e.target.value); setFicheStockData(null); }} />
-              {ficheStockDatePrecise && !dateValide(ficheStockDatePrecise) && <div className="invalid-feedback">Date invalide (ex: 19/05/2026)</div>}
-            </div>
-          ) : (
-            <>
-              <div className="col-md-3">
-                <label className="form-label fw-bold">Date Debut (jj/mm/aaaa)</label>
-                <input type="text" className={`form-control ${ficheStockDateDebut && !dateValide(ficheStockDateDebut) ? "is-invalid" : ficheStockDateDebut && dateValide(ficheStockDateDebut) ? "is-valid" : ""}`} placeholder="jj/mm/aaaa" maxLength={10} value={ficheStockDateDebut} onChange={(e) => { setFicheStockDateDebut(e.target.value); setFicheStockData(null); }} />
-                {ficheStockDateDebut && !dateValide(ficheStockDateDebut) && <div className="invalid-feedback">Date invalide</div>}
-              </div>
-              <div className="col-md-3">
-                <label className="form-label fw-bold">Date Fin (jj/mm/aaaa)</label>
-                <input type="text" className={`form-control ${ficheStockDateFin && !dateValide(ficheStockDateFin) ? "is-invalid" : ficheStockDateFin && dateValide(ficheStockDateFin) ? "is-valid" : ""}`} placeholder="jj/mm/aaaa" maxLength={10} value={ficheStockDateFin} onChange={(e) => { setFicheStockDateFin(e.target.value); setFicheStockData(null); }} />
-                {ficheStockDateFin && !dateValide(ficheStockDateFin) && <div className="invalid-feedback">Date invalide</div>}
-              </div>
-            </>
-          )}
+            <div className="col-md-3"><label className="form-label fw-bold">Date (jj/mm/aaaa)</label><input type="text" className={`form-control ${ficheStockDatePrecise && !dateValide(ficheStockDatePrecise) ? "is-invalid" : ficheStockDatePrecise && dateValide(ficheStockDatePrecise) ? "is-valid" : ""}`} placeholder="jj/mm/aaaa" maxLength={10} value={ficheStockDatePrecise} onChange={(e) => { setFicheStockDatePrecise(e.target.value); setFicheStockData(null); }} />{ficheStockDatePrecise && !dateValide(ficheStockDatePrecise) && <div className="invalid-feedback">Date invalide</div>}</div>
+          ) : (<>
+            <div className="col-md-3"><label className="form-label fw-bold">Date Debut (jj/mm/aaaa)</label><input type="text" className={`form-control ${ficheStockDateDebut && !dateValide(ficheStockDateDebut) ? "is-invalid" : ficheStockDateDebut && dateValide(ficheStockDateDebut) ? "is-valid" : ""}`} placeholder="jj/mm/aaaa" maxLength={10} value={ficheStockDateDebut} onChange={(e) => { setFicheStockDateDebut(e.target.value); setFicheStockData(null); }} />{ficheStockDateDebut && !dateValide(ficheStockDateDebut) && <div className="invalid-feedback">Date invalide</div>}</div>
+            <div className="col-md-3"><label className="form-label fw-bold">Date Fin (jj/mm/aaaa)</label><input type="text" className={`form-control ${ficheStockDateFin && !dateValide(ficheStockDateFin) ? "is-invalid" : ficheStockDateFin && dateValide(ficheStockDateFin) ? "is-valid" : ""}`} placeholder="jj/mm/aaaa" maxLength={10} value={ficheStockDateFin} onChange={(e) => { setFicheStockDateFin(e.target.value); setFicheStockData(null); }} />{ficheStockDateFin && !dateValide(ficheStockDateFin) && <div className="invalid-feedback">Date invalide</div>}</div>
+          </>)}
           <div className="col-md-3"><button className="btn btn-primary w-100" onClick={chargerFicheStock}>🔍 Afficher la Fiche</button></div>
         </div>
       </div>
@@ -730,17 +541,7 @@ function App() {
           </div>
           <table className="table table-bordered table-striped table-hover">
             <thead className="table-dark"><tr><th>Code</th><th>Designation</th><th>Unite</th><th className="text-center text-info">Stock Initial</th><th className="text-center text-success">Total Entrees</th><th className="text-center text-danger">Total Sorties</th><th className="text-center text-primary fw-bold">Stock Disponible</th></tr></thead>
-            <tbody>
-              {ficheStockData.lignes.map((l, i) => (
-                <tr key={i} className={Number(l.stock_disponible) <= 0 ? "table-danger" : ""}>
-                  <td>{l.code_produit}</td><td>{l.designation}</td><td>{l.unite}</td>
-                  <td className="text-center">{Number(l.stock_initial).toFixed(2)}</td>
-                  <td className="text-center text-success fw-bold">+{Number(l.total_entrees).toFixed(2)}</td>
-                  <td className="text-center text-danger fw-bold">-{Number(l.total_sorties).toFixed(2)}</td>
-                  <td className={`text-center fw-bold ${Number(l.stock_disponible) <= 0 ? "text-danger" : "text-primary"}`}>{Number(l.stock_disponible).toFixed(2)}</td>
-                </tr>
-              ))}
-            </tbody>
+            <tbody>{ficheStockData.lignes.map((l, i) => (<tr key={i} className={Number(l.stock_disponible) <= 0 ? "table-danger" : ""}><td>{l.code_produit}</td><td>{l.designation}</td><td>{l.unite}</td><td className="text-center">{Number(l.stock_initial).toFixed(2)}</td><td className="text-center text-success fw-bold">+{Number(l.total_entrees).toFixed(2)}</td><td className="text-center text-danger fw-bold">-{Number(l.total_sorties).toFixed(2)}</td><td className={`text-center fw-bold ${Number(l.stock_disponible) <= 0 ? "text-danger" : "text-primary"}`}>{Number(l.stock_disponible).toFixed(2)}</td></tr>))}</tbody>
           </table>
         </div>
       )}
@@ -752,46 +553,24 @@ function App() {
       <h4 className="mb-4">📋 Fiche de Mouvements</h4>
       <div className="card p-3 mb-4">
         <div className="row g-2 align-items-end">
-          <div className="col-md-6">
-            <label className="form-label fw-bold">Choisir un Produit</label>
-            <select className="form-select" value={produitSelectionne} onChange={(e) => { setProduitSelectionne(e.target.value); setFicheMouvements(null); }}>
-              <option value="">-- Selectionner un produit --</option>
-              {produits.map((p) => (<option key={p.id_produit} value={p.id_produit}>{p.code_produit} — {p.designation}</option>))}
-            </select>
-          </div>
+          <div className="col-md-6"><label className="form-label fw-bold">Choisir un Produit</label><select className="form-select" value={produitSelectionne} onChange={(e) => { setProduitSelectionne(e.target.value); setFicheMouvements(null); }}><option value="">-- Selectionner un produit --</option>{produits.map((p) => (<option key={p.id_produit} value={p.id_produit}>{p.code_produit} — {p.designation}</option>))}</select></div>
           <div className="col-md-3"><button className="btn btn-primary w-100" onClick={chargerMouvements} disabled={!produitSelectionne}>🔍 Afficher les Mouvements</button></div>
         </div>
       </div>
       {loadingMouvements && (<div className="text-center my-4"><div className="spinner-border text-primary"></div></div>)}
       {ficheMouvements && !loadingMouvements && (() => {
-        const tableauLignes = construireTableauMouvements();
-        const { produit, totaux } = ficheMouvements;
+        const tableauLignes = construireTableauMouvements(); const { produit, totaux } = ficheMouvements;
         return (
           <div className="card p-4">
             <div className="d-flex justify-content-between align-items-center mb-3">
               <div className="row p-3 bg-primary text-white rounded w-100 me-3">
-                <div className="col-md-3"><strong>Code :</strong> {produit.code_produit}</div>
-                <div className="col-md-3"><strong>Designation :</strong> {produit.designation}</div>
-                <div className="col-md-2"><strong>Unite :</strong> {produit.unite}</div>
-                <div className="col-md-2"><strong>Prix Achat :</strong> {produit.prix_achat} MRU</div>
-                <div className="col-md-2"><strong>Prix Vente :</strong> {produit.prix_vente} MRU</div>
+                <div className="col-md-3"><strong>Code :</strong> {produit.code_produit}</div><div className="col-md-3"><strong>Designation :</strong> {produit.designation}</div><div className="col-md-2"><strong>Unite :</strong> {produit.unite}</div><div className="col-md-2"><strong>Prix Achat :</strong> {produit.prix_achat} MRU</div><div className="col-md-2"><strong>Prix Vente :</strong> {produit.prix_vente} MRU</div>
               </div>
               <button className="btn btn-success text-nowrap" onClick={imprimerMouvementsPDF}>🖨️ Imprimer PDF</button>
             </div>
             <table className="table table-bordered table-hover">
               <thead className="table-dark"><tr><th>Date</th><th>N° Bon</th><th>Type</th><th>Fournisseur / Client</th><th className="text-center">Entree</th><th className="text-center">Sortie</th><th className="text-center">Stock</th></tr></thead>
-              <tbody>
-                {tableauLignes.map((ligne, i) => (
-                  <tr key={i} className={ligne._classe}>
-                    <td>{ligne.date}</td><td>{ligne.numero_bon}</td>
-                    <td>{ligne.type === "Stock Initial" && <span className="badge bg-info text-dark">📦 Stock Initial</span>}{ligne.type === "Entree" && <span className="badge bg-success">⬆️ Entree</span>}{ligne.type === "Sortie" && <span className="badge bg-danger">⬇️ Sortie</span>}</td>
-                    <td>{ligne.tiers}</td>
-                    <td className="text-center fw-bold text-success">{ligne.entree !== "-" ? ligne.entree : ""}</td>
-                    <td className="text-center fw-bold text-danger">{ligne.sortie !== "-" ? ligne.sortie : ""}</td>
-                    <td className="text-center fw-bold text-primary">{ligne.stock}</td>
-                  </tr>
-                ))}
-              </tbody>
+              <tbody>{tableauLignes.map((ligne, i) => (<tr key={i} className={ligne._classe}><td>{ligne.date}</td><td>{ligne.numero_bon}</td><td>{ligne.type === "Stock Initial" && <span className="badge bg-info text-dark">📦 Stock Initial</span>}{ligne.type === "Entree" && <span className="badge bg-success">⬆️ Entree</span>}{ligne.type === "Sortie" && <span className="badge bg-danger">⬇️ Sortie</span>}</td><td>{ligne.tiers}</td><td className="text-center fw-bold text-success">{ligne.entree !== "-" ? ligne.entree : ""}</td><td className="text-center fw-bold text-danger">{ligne.sortie !== "-" ? ligne.sortie : ""}</td><td className="text-center fw-bold text-primary">{ligne.stock}</td></tr>))}</tbody>
               <tfoot className="table-dark fw-bold"><tr><td colSpan="4" className="text-end">TOTAUX :</td><td className="text-center text-success">{totaux.total_entrees}</td><td className="text-center text-danger">{totaux.total_sorties}</td><td className="text-center text-warning">{totaux.stock_final}</td></tr></tfoot>
             </table>
             <div className="row mt-3">
@@ -811,89 +590,24 @@ function App() {
       <h4 className="mb-4">📊 Graphiques du Stock</h4>
       <div className="card mb-4 p-3">
         <h5 className="mb-3 text-primary">📦 Stock Actuel par Produit</h5>
-        <ResponsiveContainer width="100%" height={350}>
-          <BarChart data={dataStockActuel} margin={{ top: 10, right: 30, left: 0, bottom: 60 }}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="name" angle={-30} textAnchor="end" interval={0} tick={{ fontSize: 12 }} />
-            <YAxis /><Tooltip formatter={(v, n) => [v, n]} labelFormatter={(l) => { const i = dataStockActuel.find((d) => d.name === l); return i ? i.designation : l; }} />
-            <Legend verticalAlign="top" />
-            <Bar dataKey="Stock Actuel" fill="#0d6efd" radius={[4, 4, 0, 0]} />
-            <Bar dataKey="Stock Minimum" fill="#ffc107" radius={[4, 4, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
+        <ResponsiveContainer width="100%" height={350}><BarChart data={dataStockActuel} margin={{ top: 10, right: 30, left: 0, bottom: 60 }}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" angle={-30} textAnchor="end" interval={0} tick={{ fontSize: 12 }} /><YAxis /><Tooltip formatter={(v, n) => [v, n]} labelFormatter={(l) => { const i = dataStockActuel.find((d) => d.name === l); return i ? i.designation : l; }} /><Legend verticalAlign="top" /><Bar dataKey="Stock Actuel" fill="#0d6efd" radius={[4, 4, 0, 0]} /><Bar dataKey="Stock Minimum" fill="#ffc107" radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer>
       </div>
       <div className="card mb-4 p-3">
         <h5 className="mb-3 text-success">📈 Entrees vs Sorties par Produit</h5>
-        <ResponsiveContainer width="100%" height={350}>
-          <BarChart data={dataEntreesSorties} margin={{ top: 10, right: 30, left: 0, bottom: 60 }}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="name" angle={-30} textAnchor="end" interval={0} tick={{ fontSize: 12 }} />
-            <YAxis /><Tooltip formatter={(v, n) => [v, n]} labelFormatter={(l) => { const i = dataEntreesSorties.find((d) => d.name === l); return i ? i.designation : l; }} />
-            <Legend verticalAlign="top" />
-            <Bar dataKey="Entrees" fill="#198754" radius={[4, 4, 0, 0]} />
-            <Bar dataKey="Sorties" fill="#dc3545" radius={[4, 4, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
+        <ResponsiveContainer width="100%" height={350}><BarChart data={dataEntreesSorties} margin={{ top: 10, right: 30, left: 0, bottom: 60 }}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" angle={-30} textAnchor="end" interval={0} tick={{ fontSize: 12 }} /><YAxis /><Tooltip formatter={(v, n) => [v, n]} labelFormatter={(l) => { const i = dataEntreesSorties.find((d) => d.name === l); return i ? i.designation : l; }} /><Legend verticalAlign="top" /><Bar dataKey="Entrees" fill="#198754" radius={[4, 4, 0, 0]} /><Bar dataKey="Sorties" fill="#dc3545" radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer>
       </div>
     </div>
   );
 
-  const colonnes = {
-    stock: ["code_produit", "designation", "unite", "total_entree", "total_sortie", "stock_actuel"],
-    produits: ["code_produit", "designation", "unite", "prix_achat", "prix_vente", "stock_minimum"],
-    clients: ["code_client", "nom", "telephone", "adresse"],
-    fournisseurs: ["code_fournisseur", "nom", "telephone", "adresse"],
-    "liste-entree": ["numero_bon", "date_bon", "nom_fournisseur", "observation"],
-    "liste-sortie": ["numero_bon", "date_bon", "nom_client", "observation"],
-  };
+  const colonnes = { stock: ["code_produit", "designation", "unite", "total_entree", "total_sortie", "stock_actuel"], produits: ["code_produit", "designation", "unite", "prix_achat", "prix_vente", "stock_minimum"], clients: ["code_client", "nom", "telephone", "adresse"], fournisseurs: ["code_fournisseur", "nom", "telephone", "adresse"], "liste-entree": ["numero_bon", "date_bon", "nom_fournisseur", "observation"], "liste-sortie": ["numero_bon", "date_bon", "nom_client", "observation"] };
   const idCols = { produits: "id_produit", clients: "id_client", fournisseurs: "id_fournisseur" };
-  const titres = {
-    stock: "Stock Actuel", produits: "Produits", clients: "Clients", fournisseurs: "Fournisseurs",
-    "bon-entree": "Nouveau Bon d'Entree", "bon-sortie": "Nouveau Bon de Sortie",
-    "liste-entree": "Liste des Bons d'Entree", "liste-sortie": "Liste des Bons de Sortie",
-    "graphiques": "Graphiques", "mouvements": "Fiche Mouvements",
-    "fiche-stock": "Fiche de Stock", "stock-initial": "Stock Initial",
-    ...(isAdmin ? { "utilisateurs": "Utilisateurs" } : {}),
-  };
-
+  const titres = { stock: "Stock Actuel", produits: "Produits", clients: "Clients", fournisseurs: "Fournisseurs", "bon-entree": "Nouveau Bon d'Entree", "bon-sortie": "Nouveau Bon de Sortie", "liste-entree": "Liste des Bons d'Entree", "liste-sortie": "Liste des Bons de Sortie", "graphiques": "Graphiques", "mouvements": "Fiche Mouvements", "fiche-stock": "Fiche de Stock", "stock-initial": "Stock Initial", ...(isAdmin ? { "utilisateurs": "Utilisateurs" } : {}) };
   const donneesFiltrees = donnees.filter((d) => Object.values(d).some((v) => String(v).toLowerCase().includes(recherche.toLowerCase())));
 
   const renderFormAjout = () => {
-    if (page === "produits") return (
-      <div className="card p-3 mb-3"><h5 className="mb-3">Nouveau Produit</h5>
-        <div className="row g-2">
-          <div className="col-md-2"><input className="form-control" placeholder="Code *" value={newProduit.code_produit} onChange={(e) => setNewProduit({ ...newProduit, code_produit: e.target.value })} /></div>
-          <div className="col-md-3"><input className="form-control" placeholder="Designation *" value={newProduit.designation} onChange={(e) => setNewProduit({ ...newProduit, designation: e.target.value })} /></div>
-          <div className="col-md-1"><input className="form-control" placeholder="Unite" value={newProduit.unite} onChange={(e) => setNewProduit({ ...newProduit, unite: e.target.value })} /></div>
-          <div className="col-md-2"><input className="form-control" type="number" placeholder="Prix Achat" value={newProduit.prix_achat} onChange={(e) => setNewProduit({ ...newProduit, prix_achat: e.target.value })} /></div>
-          <div className="col-md-2"><input className="form-control" type="number" placeholder="Prix Vente" value={newProduit.prix_vente} onChange={(e) => setNewProduit({ ...newProduit, prix_vente: e.target.value })} /></div>
-          <div className="col-md-2"><input className="form-control" type="number" placeholder="Stock Min" value={newProduit.stock_minimum} onChange={(e) => setNewProduit({ ...newProduit, stock_minimum: e.target.value })} /></div>
-        </div>
-        <div className="mt-2"><button className="btn btn-success me-2" onClick={ajouterElement}>Enregistrer</button><button className="btn btn-secondary" onClick={() => setShowForm(false)}>Annuler</button></div>
-      </div>
-    );
-    if (page === "clients") return (
-      <div className="card p-3 mb-3"><h5 className="mb-3">Nouveau Client</h5>
-        <div className="row g-2">
-          <div className="col-md-2"><input className="form-control" placeholder="Code *" value={newClient.code_client} onChange={(e) => setNewClient({ ...newClient, code_client: e.target.value })} /></div>
-          <div className="col-md-3"><input className="form-control" placeholder="Nom *" value={newClient.nom} onChange={(e) => setNewClient({ ...newClient, nom: e.target.value })} /></div>
-          <div className="col-md-3"><input className="form-control" placeholder="Telephone" value={newClient.telephone} onChange={(e) => setNewClient({ ...newClient, telephone: e.target.value })} /></div>
-          <div className="col-md-4"><input className="form-control" placeholder="Adresse" value={newClient.adresse} onChange={(e) => setNewClient({ ...newClient, adresse: e.target.value })} /></div>
-        </div>
-        <div className="mt-2"><button className="btn btn-success me-2" onClick={ajouterElement}>Enregistrer</button><button className="btn btn-secondary" onClick={() => setShowForm(false)}>Annuler</button></div>
-      </div>
-    );
-    if (page === "fournisseurs") return (
-      <div className="card p-3 mb-3"><h5 className="mb-3">Nouveau Fournisseur</h5>
-        <div className="row g-2">
-          <div className="col-md-2"><input className="form-control" placeholder="Code *" value={newFournisseur.code_fournisseur} onChange={(e) => setNewFournisseur({ ...newFournisseur, code_fournisseur: e.target.value })} /></div>
-          <div className="col-md-3"><input className="form-control" placeholder="Nom *" value={newFournisseur.nom} onChange={(e) => setNewFournisseur({ ...newFournisseur, nom: e.target.value })} /></div>
-          <div className="col-md-3"><input className="form-control" placeholder="Telephone" value={newFournisseur.telephone} onChange={(e) => setNewFournisseur({ ...newFournisseur, telephone: e.target.value })} /></div>
-          <div className="col-md-4"><input className="form-control" placeholder="Adresse" value={newFournisseur.adresse} onChange={(e) => setNewFournisseur({ ...newFournisseur, adresse: e.target.value })} /></div>
-        </div>
-        <div className="mt-2"><button className="btn btn-success me-2" onClick={ajouterElement}>Enregistrer</button><button className="btn btn-secondary" onClick={() => setShowForm(false)}>Annuler</button></div>
-      </div>
-    );
+    if (page === "produits") return (<div className="card p-3 mb-3"><h5 className="mb-3">Nouveau Produit</h5><div className="row g-2"><div className="col-md-2"><input className="form-control" placeholder="Code *" value={newProduit.code_produit} onChange={(e) => setNewProduit({ ...newProduit, code_produit: e.target.value })} /></div><div className="col-md-3"><input className="form-control" placeholder="Designation *" value={newProduit.designation} onChange={(e) => setNewProduit({ ...newProduit, designation: e.target.value })} /></div><div className="col-md-1"><input className="form-control" placeholder="Unite" value={newProduit.unite} onChange={(e) => setNewProduit({ ...newProduit, unite: e.target.value })} /></div><div className="col-md-2"><input className="form-control" type="number" placeholder="Prix Achat" value={newProduit.prix_achat} onChange={(e) => setNewProduit({ ...newProduit, prix_achat: e.target.value })} /></div><div className="col-md-2"><input className="form-control" type="number" placeholder="Prix Vente" value={newProduit.prix_vente} onChange={(e) => setNewProduit({ ...newProduit, prix_vente: e.target.value })} /></div><div className="col-md-2"><input className="form-control" type="number" placeholder="Stock Min" value={newProduit.stock_minimum} onChange={(e) => setNewProduit({ ...newProduit, stock_minimum: e.target.value })} /></div></div><div className="mt-2"><button className="btn btn-success me-2" onClick={ajouterElement}>Enregistrer</button><button className="btn btn-secondary" onClick={() => setShowForm(false)}>Annuler</button></div></div>);
+    if (page === "clients") return (<div className="card p-3 mb-3"><h5 className="mb-3">Nouveau Client</h5><div className="row g-2"><div className="col-md-2"><input className="form-control" placeholder="Code *" value={newClient.code_client} onChange={(e) => setNewClient({ ...newClient, code_client: e.target.value })} /></div><div className="col-md-3"><input className="form-control" placeholder="Nom *" value={newClient.nom} onChange={(e) => setNewClient({ ...newClient, nom: e.target.value })} /></div><div className="col-md-3"><input className="form-control" placeholder="Telephone" value={newClient.telephone} onChange={(e) => setNewClient({ ...newClient, telephone: e.target.value })} /></div><div className="col-md-4"><input className="form-control" placeholder="Adresse" value={newClient.adresse} onChange={(e) => setNewClient({ ...newClient, adresse: e.target.value })} /></div></div><div className="mt-2"><button className="btn btn-success me-2" onClick={ajouterElement}>Enregistrer</button><button className="btn btn-secondary" onClick={() => setShowForm(false)}>Annuler</button></div></div>);
+    if (page === "fournisseurs") return (<div className="card p-3 mb-3"><h5 className="mb-3">Nouveau Fournisseur</h5><div className="row g-2"><div className="col-md-2"><input className="form-control" placeholder="Code *" value={newFournisseur.code_fournisseur} onChange={(e) => setNewFournisseur({ ...newFournisseur, code_fournisseur: e.target.value })} /></div><div className="col-md-3"><input className="form-control" placeholder="Nom *" value={newFournisseur.nom} onChange={(e) => setNewFournisseur({ ...newFournisseur, nom: e.target.value })} /></div><div className="col-md-3"><input className="form-control" placeholder="Telephone" value={newFournisseur.telephone} onChange={(e) => setNewFournisseur({ ...newFournisseur, telephone: e.target.value })} /></div><div className="col-md-4"><input className="form-control" placeholder="Adresse" value={newFournisseur.adresse} onChange={(e) => setNewFournisseur({ ...newFournisseur, adresse: e.target.value })} /></div></div><div className="mt-2"><button className="btn btn-success me-2" onClick={ajouterElement}>Enregistrer</button><button className="btn btn-secondary" onClick={() => setShowForm(false)}>Annuler</button></div></div>);
   };
 
   const renderFormulaireBon = (type) => (
@@ -902,14 +616,8 @@ function App() {
       {message && <div className={`alert ${message.includes("succes") ? "alert-success" : "alert-danger"}`}>{message}</div>}
       <div className="row mb-3">
         <div className="col-md-4"><label className="form-label">Numero Bon *</label><input type="text" className="form-control" value={bon.numero_bon} onChange={(e) => setBon({ ...bon, numero_bon: e.target.value })} /></div>
-        <div className="col-md-4">
-          <label className="form-label">Date * (jj/mm/aaaa)</label>
-          <input type="text" className={`form-control ${saisieDate && !dateValide(saisieDate) ? "is-invalid" : saisieDate && dateValide(saisieDate) ? "is-valid" : ""}`} placeholder="jj/mm/aaaa" maxLength={10} value={saisieDate} onChange={(e) => { setSaisieDate(e.target.value); if (dateValide(e.target.value)) setBon({ ...bon, date_bon: parseFR(e.target.value) }); }} />
-          {saisieDate && !dateValide(saisieDate) && <div className="invalid-feedback">Date invalide (ex: 19/05/2026)</div>}
-        </div>
-        <div className="col-md-4">
-          {type === "bon-entree" ? (<><label className="form-label">Fournisseur *</label><select className="form-select" value={bon.id_fournisseur} onChange={(e) => setBon({ ...bon, id_fournisseur: e.target.value })}><option value="">-- Choisir --</option>{fournisseurs.map((f) => <option key={f.id_fournisseur} value={f.id_fournisseur}>{f.nom}</option>)}</select></>) : (<><label className="form-label">Client *</label><select className="form-select" value={bon.id_client} onChange={(e) => setBon({ ...bon, id_client: e.target.value })}><option value="">-- Choisir --</option>{clients.map((c) => <option key={c.id_client} value={c.id_client}>{c.nom}</option>)}</select></>)}
-        </div>
+        <div className="col-md-4"><label className="form-label">Date * (jj/mm/aaaa)</label><input type="text" className={`form-control ${saisieDate && !dateValide(saisieDate) ? "is-invalid" : saisieDate && dateValide(saisieDate) ? "is-valid" : ""}`} placeholder="jj/mm/aaaa" maxLength={10} value={saisieDate} onChange={(e) => { setSaisieDate(e.target.value); if (dateValide(e.target.value)) setBon({ ...bon, date_bon: parseFR(e.target.value) }); }} />{saisieDate && !dateValide(saisieDate) && <div className="invalid-feedback">Date invalide (ex: 19/05/2026)</div>}</div>
+        <div className="col-md-4">{type === "bon-entree" ? (<><label className="form-label">Fournisseur *</label><select className="form-select" value={bon.id_fournisseur} onChange={(e) => setBon({ ...bon, id_fournisseur: e.target.value })}><option value="">-- Choisir --</option>{fournisseurs.map((f) => <option key={f.id_fournisseur} value={f.id_fournisseur}>{f.nom}</option>)}</select></>) : (<><label className="form-label">Client *</label><select className="form-select" value={bon.id_client} onChange={(e) => setBon({ ...bon, id_client: e.target.value })}><option value="">-- Choisir --</option>{clients.map((c) => <option key={c.id_client} value={c.id_client}>{c.nom}</option>)}</select></>)}</div>
       </div>
       <div className="mb-3"><label className="form-label">Observation</label><input type="text" className="form-control" value={bon.observation} onChange={(e) => setBon({ ...bon, observation: e.target.value })} /></div>
       <h5 className="mb-3">Produits</h5>
@@ -922,24 +630,15 @@ function App() {
   );
 
   const renderFormulaireModificationBon = () => {
-    if (!bonEnEdition) return null;
-    const type = bonEnEdition._type;
+    if (!bonEnEdition) return null; const type = bonEnEdition._type;
     return (
       <div className="card p-4 border-warning">
-        <div className="d-flex justify-content-between align-items-center mb-4">
-          <h4 className="text-warning">✏️ Modifier le Bon : {bonEnEdition.numero_bon}</h4>
-          <button className="btn btn-secondary" onClick={() => { setShowEditBon(false); setBonEnEdition(null); }}>Annuler</button>
-        </div>
+        <div className="d-flex justify-content-between align-items-center mb-4"><h4 className="text-warning">✏️ Modifier le Bon : {bonEnEdition.numero_bon}</h4><button className="btn btn-secondary" onClick={() => { setShowEditBon(false); setBonEnEdition(null); }}>Annuler</button></div>
         {message && <div className={`alert ${message.includes("succes") ? "alert-success" : "alert-danger"}`}>{message}</div>}
         <div className="row mb-3">
           <div className="col-md-4"><label className="form-label">Numero Bon *</label><input type="text" className="form-control" value={bonEnEdition.numero_bon} onChange={(e) => setBonEnEdition({ ...bonEnEdition, numero_bon: e.target.value })} /></div>
-          <div className="col-md-4">
-            <label className="form-label">Date * (jj/mm/aaaa)</label>
-            <input type="text" className="form-control" placeholder="jj/mm/aaaa" maxLength={10} value={saisieEditionDate || (bonEnEdition.date_bon ? formatDateFR(bonEnEdition.date_bon.substring(0, 10)) : "")} onChange={(e) => { setSaisieEditionDate(e.target.value); if (dateValide(e.target.value)) setBonEnEdition({ ...bonEnEdition, date_bon: parseFR(e.target.value) }); }} />
-          </div>
-          <div className="col-md-4">
-            {type === "entree" ? (<><label className="form-label">Fournisseur *</label><select className="form-select" value={bonEnEdition.id_fournisseur} onChange={(e) => setBonEnEdition({ ...bonEnEdition, id_fournisseur: e.target.value })}><option value="">-- Choisir --</option>{fournisseurs.map((f) => <option key={f.id_fournisseur} value={f.id_fournisseur}>{f.nom}</option>)}</select></>) : (<><label className="form-label">Client *</label><select className="form-select" value={bonEnEdition.id_client} onChange={(e) => setBonEnEdition({ ...bonEnEdition, id_client: e.target.value })}><option value="">-- Choisir --</option>{clients.map((c) => <option key={c.id_client} value={c.id_client}>{c.nom}</option>)}</select></>)}
-          </div>
+          <div className="col-md-4"><label className="form-label">Date * (jj/mm/aaaa)</label><input type="text" className="form-control" placeholder="jj/mm/aaaa" maxLength={10} value={saisieEditionDate || (bonEnEdition.date_bon ? formatDateFR(bonEnEdition.date_bon.substring(0, 10)) : "")} onChange={(e) => { setSaisieEditionDate(e.target.value); if (dateValide(e.target.value)) setBonEnEdition({ ...bonEnEdition, date_bon: parseFR(e.target.value) }); }} /></div>
+          <div className="col-md-4">{type === "entree" ? (<><label className="form-label">Fournisseur *</label><select className="form-select" value={bonEnEdition.id_fournisseur} onChange={(e) => setBonEnEdition({ ...bonEnEdition, id_fournisseur: e.target.value })}><option value="">-- Choisir --</option>{fournisseurs.map((f) => <option key={f.id_fournisseur} value={f.id_fournisseur}>{f.nom}</option>)}</select></>) : (<><label className="form-label">Client *</label><select className="form-select" value={bonEnEdition.id_client} onChange={(e) => setBonEnEdition({ ...bonEnEdition, id_client: e.target.value })}><option value="">-- Choisir --</option>{clients.map((c) => <option key={c.id_client} value={c.id_client}>{c.nom}</option>)}</select></>)}</div>
         </div>
         <div className="mb-3"><label className="form-label">Observation</label><input type="text" className="form-control" value={bonEnEdition.observation || ""} onChange={(e) => setBonEnEdition({ ...bonEnEdition, observation: e.target.value })} /></div>
         <h5 className="mb-3">Produits</h5>
@@ -966,12 +665,7 @@ function App() {
               <button className="btn btn-secondary" onClick={() => setBonDetail(null)}>Retour</button>
             </div>
           </div>
-          <div className="row mb-3">
-            <div className="col-md-3"><strong>Numero :</strong> {bonDetail.numero_bon}</div>
-            <div className="col-md-3"><strong>Date :</strong> {formatDateFR(bonDetail.date_bon?.substring(0, 10))}</div>
-            <div className="col-md-3"><strong>{type === "entree" ? "Fournisseur" : "Client"} :</strong> {type === "entree" ? bonDetail.nom_fournisseur : bonDetail.nom_client}</div>
-            <div className="col-md-3"><strong>Observation :</strong> {bonDetail.observation}</div>
-          </div>
+          <div className="row mb-3"><div className="col-md-3"><strong>Numero :</strong> {bonDetail.numero_bon}</div><div className="col-md-3"><strong>Date :</strong> {formatDateFR(bonDetail.date_bon?.substring(0, 10))}</div><div className="col-md-3"><strong>{type === "entree" ? "Fournisseur" : "Client"} :</strong> {type === "entree" ? bonDetail.nom_fournisseur : bonDetail.nom_client}</div><div className="col-md-3"><strong>Observation :</strong> {bonDetail.observation}</div></div>
           <table className="table table-bordered table-striped"><thead className="table-dark"><tr><th>Code</th><th>Designation</th><th>Quantite</th><th>Prix Unitaire</th><th>Montant</th></tr></thead>
             <tbody>{lignesDetail.map((l, i) => (<tr key={i}><td>{l.code_produit}</td><td>{l.designation}</td><td>{l.quantite}</td><td>{l.prix_unitaire}</td><td>{l.montant} MRU</td></tr>))}</tbody>
             <tfoot className="table-secondary fw-bold"><tr><td colSpan="4" className="text-end">TOTAL GENERAL :</td><td>{lignesDetail.reduce((sum, l) => sum + Number(l.montant || 0), 0).toLocaleString("fr-FR")} MRU</td></tr></tfoot>
@@ -985,11 +679,7 @@ function App() {
           {loading ? (<div className="text-center"><div className="spinner-border text-primary"></div></div>) : (
             <table className="table table-bordered table-striped table-hover">
               <thead className="table-dark"><tr>{colonnes[page].map((col) => <th key={col}>{col.replace(/_/g, " ").toUpperCase()}</th>)}<th>ACTIONS</th></tr></thead>
-              <tbody>{donneesFiltrees.map((d, i) => (<tr key={i}>{colonnes[page].map((col) => <td key={col}>{col.includes("date") ? formatDateFR(d[col]?.substring(0, 10)) : d[col]}</td>)}<td className="text-center">
-                <button className="btn btn-primary btn-sm me-2" onClick={() => voirDetailBon(d, type)}>Detail</button>
-                {isAdmin && <button className="btn btn-warning btn-sm me-2" onClick={() => ouvrirModificationBon(d, type)}>✏️ Modifier</button>}
-                {isAdmin && <button className="btn btn-danger btn-sm" onClick={() => supprimerBon(type === "entree" ? d.id_bon_entree : d.id_bon_sortie, type)}>🗑️ Supprimer</button>}
-              </td></tr>))}</tbody>
+              <tbody>{donneesFiltrees.map((d, i) => (<tr key={i}>{colonnes[page].map((col) => <td key={col}>{col.includes("date") ? formatDateFR(d[col]?.substring(0, 10)) : d[col]}</td>)}<td className="text-center"><button className="btn btn-primary btn-sm me-2" onClick={() => voirDetailBon(d, type)}>Detail</button>{isAdmin && <button className="btn btn-warning btn-sm me-2" onClick={() => ouvrirModificationBon(d, type)}>✏️ Modifier</button>}{isAdmin && <button className="btn btn-danger btn-sm" onClick={() => supprimerBon(type === "entree" ? d.id_bon_entree : d.id_bon_sortie, type)}>🗑️ Supprimer</button>}</td></tr>))}</tbody>
             </table>
           )}
         </>
@@ -997,7 +687,6 @@ function App() {
     </>
   );
 
-  // AFFICHER LOGIN SI PAS CONNECTE
   if (!token) return renderLogin();
 
   return (
@@ -1005,20 +694,14 @@ function App() {
       <nav className="navbar navbar-dark bg-primary px-4 mb-4 d-flex justify-content-between">
         <span className="navbar-brand fw-bold fs-4">📦 Gestion de Stock</span>
         <div className="d-flex align-items-center">
-          <span className="text-white me-3">
-            {isAdmin ? "👑" : "👤"} <strong>{utilisateur?.nom}</strong>
-            <span className={`badge ms-2 ${isAdmin ? "bg-warning text-dark" : "bg-light text-dark"}`}>{isAdmin ? "Admin" : "Utilisateur"}</span>
-          </span>
+          <span className="text-white me-3">{isAdmin ? "👑" : "👤"} <strong>{utilisateur?.nom}</strong><span className={`badge ms-2 ${isAdmin ? "bg-warning text-dark" : "bg-light text-dark"}`}>{isAdmin ? "Admin" : "Utilisateur"}</span></span>
           <button className="btn btn-outline-light btn-sm" onClick={seDeconnecter}>🚪 Deconnexion</button>
         </div>
       </nav>
 
       {totalAlertes > 0 && (
         <div className="alert alert-danger mx-3 mb-0 d-flex justify-content-between align-items-center" style={{ borderRadius: 0, cursor: "pointer" }} onClick={() => setShowAlertes(!showAlertes)}>
-          <span>🚨 <strong>{totalAlertes} alerte(s) de stock :</strong>
-            {produitsRuptureTotale.length > 0 && <span className="badge bg-danger ms-2">{produitsRuptureTotale.length} rupture(s) totale(s)</span>}
-            {produitsStockFaible.length > 0 && <span className="badge bg-warning text-dark ms-2">{produitsStockFaible.length} stock(s) faible(s)</span>}
-          </span>
+          <span>🚨 <strong>{totalAlertes} alerte(s) de stock :</strong>{produitsRuptureTotale.length > 0 && <span className="badge bg-danger ms-2">{produitsRuptureTotale.length} rupture(s) totale(s)</span>}{produitsStockFaible.length > 0 && <span className="badge bg-warning text-dark ms-2">{produitsStockFaible.length} stock(s) faible(s)</span>}</span>
           <span>{showAlertes ? "▲ Masquer" : "▼ Voir details"}</span>
         </div>
       )}
@@ -1055,22 +738,13 @@ function App() {
         {stockData.length > 0 && (
           <div className="card mb-4 p-3">
             <h5 className="mb-3 text-primary">📊 Apercu Stock Actuel</h5>
-            <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={dataStockActuel} margin={{ top: 5, right: 20, left: 0, bottom: 50 }}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" angle={-30} textAnchor="end" interval={0} tick={{ fontSize: 11 }} />
-                <YAxis /><Tooltip labelFormatter={(l) => { const i = dataStockActuel.find((d) => d.name === l); return i ? i.designation : l; }} />
-                <Legend verticalAlign="top" />
-                <Bar dataKey="Stock Actuel" fill="#0d6efd" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="Stock Minimum" fill="#ffc107" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            <ResponsiveContainer width="100%" height={250}><BarChart data={dataStockActuel} margin={{ top: 5, right: 20, left: 0, bottom: 50 }}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" angle={-30} textAnchor="end" interval={0} tick={{ fontSize: 11 }} /><YAxis /><Tooltip labelFormatter={(l) => { const i = dataStockActuel.find((d) => d.name === l); return i ? i.designation : l; }} /><Legend verticalAlign="top" /><Bar dataKey="Stock Actuel" fill="#0d6efd" radius={[4, 4, 0, 0]} /><Bar dataKey="Stock Minimum" fill="#ffc107" radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer>
           </div>
         )}
 
         <div className="mb-4">
           {Object.keys(titres).map((p) => (
-            <button key={p} onClick={() => { setPage(p); resetBon(); setBonDetail(null); setShowEditBon(false); setFicheMouvements(null); setProduitSelectionne(""); setFicheStockData(null); }}
+            <button key={p} onClick={() => { setPage(p); resetBon(); setBonDetail(null); setShowEditBon(false); setFicheMouvements(null); setProduitSelectionne(""); setFicheStockData(null); setStockInitialEnEdition(null); }}
               className={`btn me-2 mb-2 ${page === p ? "btn-primary" : "btn-secondary"}`}>
               {p === "graphiques" ? "📊 " : p === "mouvements" ? "📋 " : p === "fiche-stock" ? "📊 " : p === "stock-initial" ? "📦 " : p === "utilisateurs" ? "👥 " : ""}{titres[p]}
             </button>
@@ -1098,11 +772,7 @@ function App() {
               {loading ? (<div className="text-center"><div className="spinner-border text-primary"></div></div>) : (
                 <table className="table table-bordered table-striped table-hover">
                   <thead className="table-dark"><tr>{colonnes[page] && colonnes[page].map((col) => (<th key={col}>{col.replace(/_/g, " ").toUpperCase()}</th>))}{["produits", "clients", "fournisseurs"].includes(page) && <th>ACTIONS</th>}</tr></thead>
-                  <tbody>{donneesFiltrees.map((d, i) => (<tr key={i}>{colonnes[page] && colonnes[page].map((col) => (<td key={col}>{d[col]}</td>))}{["produits", "clients", "fournisseurs"].includes(page) && (<td className="text-center">
-                    {isAdmin && <button className="btn btn-warning btn-sm me-2" onClick={() => ouvrirModification(d)}>✏️ Modifier</button>}
-                    {isAdmin && <button className="btn btn-danger btn-sm" onClick={() => supprimerElement(d[idCols[page]])}>🗑️ Supprimer</button>}
-                    {!isAdmin && <span className="text-muted small">Consultation seulement</span>}
-                  </td>)}</tr>))}</tbody>
+                  <tbody>{donneesFiltrees.map((d, i) => (<tr key={i}>{colonnes[page] && colonnes[page].map((col) => (<td key={col}>{d[col]}</td>))}{["produits", "clients", "fournisseurs"].includes(page) && (<td className="text-center">{isAdmin && <button className="btn btn-warning btn-sm me-2" onClick={() => ouvrirModification(d)}>✏️ Modifier</button>}{isAdmin && <button className="btn btn-danger btn-sm" onClick={() => supprimerElement(d[idCols[page]])}>🗑️ Supprimer</button>}{!isAdmin && <span className="text-muted small">Consultation seulement</span>}</td>)}</tr>))}</tbody>
                 </table>
               )}
             </>
@@ -1111,34 +781,14 @@ function App() {
 
       {showEditModal && elementAModifier && isAdmin && (
         <div className="modal show d-block" style={{ backgroundColor: "rgba(0,0,0,0.5)" }}>
-          <div className="modal-dialog modal-lg">
-            <div className="modal-content">
-              <div className="modal-header bg-warning">
-                <h5 className="modal-title">✏️ Modifier {page === "produits" ? "Produit" : page === "clients" ? "Client" : "Fournisseur"}</h5>
-                <button className="btn-close" onClick={() => setShowEditModal(false)}></button>
-              </div>
-              <div className="modal-body">
-                {page === "produits" && (<div className="row g-3">
-                  <div className="col-md-2"><label className="form-label">Code</label><input className="form-control" value={elementAModifier.code_produit || ""} onChange={(e) => setElementAModifier({ ...elementAModifier, code_produit: e.target.value })} /></div>
-                  <div className="col-md-4"><label className="form-label">Designation</label><input className="form-control" value={elementAModifier.designation || ""} onChange={(e) => setElementAModifier({ ...elementAModifier, designation: e.target.value })} /></div>
-                  <div className="col-md-2"><label className="form-label">Unite</label><input className="form-control" value={elementAModifier.unite || ""} onChange={(e) => setElementAModifier({ ...elementAModifier, unite: e.target.value })} /></div>
-                  <div className="col-md-2"><label className="form-label">Prix Achat</label><input type="number" className="form-control" value={elementAModifier.prix_achat || ""} onChange={(e) => setElementAModifier({ ...elementAModifier, prix_achat: e.target.value })} /></div>
-                  <div className="col-md-2"><label className="form-label">Prix Vente</label><input type="number" className="form-control" value={elementAModifier.prix_vente || ""} onChange={(e) => setElementAModifier({ ...elementAModifier, prix_vente: e.target.value })} /></div>
-                  <div className="col-md-2"><label className="form-label">Stock Minimum</label><input type="number" className="form-control" value={elementAModifier.stock_minimum || ""} onChange={(e) => setElementAModifier({ ...elementAModifier, stock_minimum: e.target.value })} /></div>
-                </div>)}
-                {(page === "clients" || page === "fournisseurs") && (<div className="row g-3">
-                  <div className="col-md-3"><label className="form-label">Code</label><input className="form-control" value={elementAModifier[page === "clients" ? "code_client" : "code_fournisseur"] || ""} onChange={(e) => setElementAModifier({ ...elementAModifier, [page === "clients" ? "code_client" : "code_fournisseur"]: e.target.value })} /></div>
-                  <div className="col-md-3"><label className="form-label">Nom</label><input className="form-control" value={elementAModifier.nom || ""} onChange={(e) => setElementAModifier({ ...elementAModifier, nom: e.target.value })} /></div>
-                  <div className="col-md-3"><label className="form-label">Telephone</label><input className="form-control" value={elementAModifier.telephone || ""} onChange={(e) => setElementAModifier({ ...elementAModifier, telephone: e.target.value })} /></div>
-                  <div className="col-md-3"><label className="form-label">Adresse</label><input className="form-control" value={elementAModifier.adresse || ""} onChange={(e) => setElementAModifier({ ...elementAModifier, adresse: e.target.value })} /></div>
-                </div>)}
-              </div>
-              <div className="modal-footer">
-                <button className="btn btn-secondary" onClick={() => setShowEditModal(false)}>Annuler</button>
-                <button className="btn btn-warning" onClick={enregistrerModification}>💾 Enregistrer</button>
-              </div>
+          <div className="modal-dialog modal-lg"><div className="modal-content">
+            <div className="modal-header bg-warning"><h5 className="modal-title">✏️ Modifier {page === "produits" ? "Produit" : page === "clients" ? "Client" : "Fournisseur"}</h5><button className="btn-close" onClick={() => setShowEditModal(false)}></button></div>
+            <div className="modal-body">
+              {page === "produits" && (<div className="row g-3"><div className="col-md-2"><label className="form-label">Code</label><input className="form-control" value={elementAModifier.code_produit || ""} onChange={(e) => setElementAModifier({ ...elementAModifier, code_produit: e.target.value })} /></div><div className="col-md-4"><label className="form-label">Designation</label><input className="form-control" value={elementAModifier.designation || ""} onChange={(e) => setElementAModifier({ ...elementAModifier, designation: e.target.value })} /></div><div className="col-md-2"><label className="form-label">Unite</label><input className="form-control" value={elementAModifier.unite || ""} onChange={(e) => setElementAModifier({ ...elementAModifier, unite: e.target.value })} /></div><div className="col-md-2"><label className="form-label">Prix Achat</label><input type="number" className="form-control" value={elementAModifier.prix_achat || ""} onChange={(e) => setElementAModifier({ ...elementAModifier, prix_achat: e.target.value })} /></div><div className="col-md-2"><label className="form-label">Prix Vente</label><input type="number" className="form-control" value={elementAModifier.prix_vente || ""} onChange={(e) => setElementAModifier({ ...elementAModifier, prix_vente: e.target.value })} /></div><div className="col-md-2"><label className="form-label">Stock Minimum</label><input type="number" className="form-control" value={elementAModifier.stock_minimum || ""} onChange={(e) => setElementAModifier({ ...elementAModifier, stock_minimum: e.target.value })} /></div></div>)}
+              {(page === "clients" || page === "fournisseurs") && (<div className="row g-3"><div className="col-md-3"><label className="form-label">Code</label><input className="form-control" value={elementAModifier[page === "clients" ? "code_client" : "code_fournisseur"] || ""} onChange={(e) => setElementAModifier({ ...elementAModifier, [page === "clients" ? "code_client" : "code_fournisseur"]: e.target.value })} /></div><div className="col-md-3"><label className="form-label">Nom</label><input className="form-control" value={elementAModifier.nom || ""} onChange={(e) => setElementAModifier({ ...elementAModifier, nom: e.target.value })} /></div><div className="col-md-3"><label className="form-label">Telephone</label><input className="form-control" value={elementAModifier.telephone || ""} onChange={(e) => setElementAModifier({ ...elementAModifier, telephone: e.target.value })} /></div><div className="col-md-3"><label className="form-label">Adresse</label><input className="form-control" value={elementAModifier.adresse || ""} onChange={(e) => setElementAModifier({ ...elementAModifier, adresse: e.target.value })} /></div></div>)}
             </div>
-          </div>
+            <div className="modal-footer"><button className="btn btn-secondary" onClick={() => setShowEditModal(false)}>Annuler</button><button className="btn btn-warning" onClick={enregistrerModification}>💾 Enregistrer</button></div>
+          </div></div>
         </div>
       )}
     </div>
