@@ -9,6 +9,53 @@ import {
 function App() {
   const API = "https://gestion-stock-backend-5qm3.onrender.com";
 
+  // ETATS AUTHENTIFICATION
+  const [token, setToken] = useState(localStorage.getItem("token") || null);
+  const [utilisateur, setUtilisateur] = useState(JSON.parse(localStorage.getItem("utilisateur") || "null"));
+  const [loginForm, setLoginForm] = useState({ login: "", mot_de_passe: "" });
+  const [loginErreur, setLoginErreur] = useState("");
+  const [loadingLogin, setLoadingLogin] = useState(false);
+
+  const isAdmin = utilisateur?.role === "admin";
+
+  // HEADERS avec token
+  const headers = () => ({
+    "Content-Type": "application/json",
+    "Authorization": `Bearer ${token}`
+  });
+
+  const seConnecter = async () => {
+    setLoginErreur("");
+    setLoadingLogin(true);
+    try {
+      const response = await fetch(`${API}/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(loginForm),
+      });
+      const data = await response.json();
+      if (data.success) {
+        setToken(data.token);
+        setUtilisateur(data.utilisateur);
+        localStorage.setItem("token", data.token);
+        localStorage.setItem("utilisateur", JSON.stringify(data.utilisateur));
+      } else {
+        setLoginErreur(data.error || "Login ou mot de passe incorrect");
+      }
+    } catch (err) {
+      setLoginErreur("Erreur de connexion au serveur !");
+    }
+    setLoadingLogin(false);
+  };
+
+  const seDeconnecter = () => {
+    setToken(null);
+    setUtilisateur(null);
+    localStorage.removeItem("token");
+    localStorage.removeItem("utilisateur");
+    setPage("stock");
+  };
+
   const [page, setPage] = useState("stock");
   const [donnees, setDonnees] = useState([]);
   const [recherche, setRecherche] = useState("");
@@ -53,13 +100,22 @@ function App() {
   const [stockInitialEdite, setStockInitialEdite] = useState({});
   const [stockInitialSaisieDates, setStockInitialSaisieDates] = useState({});
 
+  // ETATS GESTION UTILISATEURS
+  const [utilisateursData, setUtilisateursData] = useState([]);
+  const [loadingUtilisateurs, setLoadingUtilisateurs] = useState(false);
+  const [newUtilisateur, setNewUtilisateur] = useState({ login: "", mot_de_passe: "", nom: "", role: "utilisateur" });
+  const [showFormUtilisateur, setShowFormUtilisateur] = useState(false);
+  const [utilisateurAModifier, setUtilisateurAModifier] = useState(null);
+
   const chargerStats = () => {
+    if (!token) return;
     Promise.all([
-      fetch(`${API}/produits`).then((r) => r.json()),
-      fetch(`${API}/clients`).then((r) => r.json()),
-      fetch(`${API}/fournisseurs`).then((r) => r.json()),
-      fetch(`${API}/stock`).then((r) => r.json()),
+      fetch(`${API}/produits`, { headers: headers() }).then((r) => r.json()),
+      fetch(`${API}/clients`, { headers: headers() }).then((r) => r.json()),
+      fetch(`${API}/fournisseurs`, { headers: headers() }).then((r) => r.json()),
+      fetch(`${API}/stock`, { headers: headers() }).then((r) => r.json()),
     ]).then(([produits, clients, fournisseurs, stock]) => {
+      if (produits.error || clients.error) return;
       setStats({
         produits: produits.length,
         clients: clients.length,
@@ -73,10 +129,11 @@ function App() {
     });
   };
 
-  useEffect(() => { chargerStats(); }, []);
+  useEffect(() => { if (token) chargerStats(); }, [token]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (["bon-entree", "bon-sortie", "mouvements", "fiche-stock", "stock-initial"].includes(page)) return;
+    if (!token) return;
+    if (["bon-entree", "bon-sortie", "mouvements", "fiche-stock", "stock-initial", "utilisateurs"].includes(page)) return;
     setLoading(true);
     setDonnees([]);
     setRecherche("");
@@ -87,11 +144,11 @@ function App() {
     const url = page === "liste-entree" ? `${API}/bons-entree`
       : page === "liste-sortie" ? `${API}/bons-sortie`
       : `${API}/${page}`;
-    fetch(url)
+    fetch(url, { headers: headers() })
       .then((res) => res.json())
       .then((data) => { setDonnees(data); setLoading(false); })
       .catch(() => setLoading(false));
-  }, [page]);
+  }, [page, token]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const produitsRuptureTotale = stockData.filter((s) => Number(s.stock_actuel) <= 0);
   const produitsStockFaible = stockData.filter((s) =>
@@ -162,7 +219,7 @@ function App() {
       ? { numero_bon: bon.numero_bon, date_bon: bon.date_bon, id_fournisseur: bon.id_fournisseur, observation: bon.observation, lignes }
       : { numero_bon: bon.numero_bon, date_bon: bon.date_bon, id_client: bon.id_client, observation: bon.observation, lignes };
     try {
-      const response = await fetch(`${API}/${type}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const response = await fetch(`${API}/${type}`, { method: "POST", headers: headers(), body: JSON.stringify(body) });
       const data = await response.json();
       if (data.success) { setMessage("Bon enregistre avec succes !"); resetBon(); chargerStats(); }
       else { setMessage("Erreur : " + data.error); }
@@ -175,14 +232,14 @@ function App() {
     else if (page === "clients") { url = `${API}/clients`; body = newClient; }
     else if (page === "fournisseurs") { url = `${API}/fournisseurs`; body = newFournisseur; }
     try {
-      const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const response = await fetch(url, { method: "POST", headers: headers(), body: JSON.stringify(body) });
       const data = await response.json();
       if (data.success) {
         setMessage("Ajoute avec succes !"); setShowForm(false);
         setNewProduit({ code_produit: "", designation: "", unite: "", prix_achat: "", prix_vente: "", stock_minimum: "" });
         setNewClient({ code_client: "", nom: "", telephone: "", adresse: "" });
         setNewFournisseur({ code_fournisseur: "", nom: "", telephone: "", adresse: "" });
-        fetch(`${API}/${page}`).then((r) => r.json()).then(setDonnees); chargerStats();
+        fetch(`${API}/${page}`, { headers: headers() }).then((r) => r.json()).then(setDonnees); chargerStats();
       } else { setMessage("Erreur : " + data.error); }
     } catch (err) { setMessage("Erreur de connexion !"); }
   };
@@ -194,9 +251,9 @@ function App() {
     else if (page === "clients") url = `${API}/clients/${id}`;
     else if (page === "fournisseurs") url = `${API}/fournisseurs/${id}`;
     try {
-      const response = await fetch(url, { method: "DELETE" });
+      const response = await fetch(url, { method: "DELETE", headers: headers() });
       const data = await response.json();
-      if (data.success) { setMessage("Supprime avec succes !"); fetch(`${API}/${page}`).then((r) => r.json()).then(setDonnees); chargerStats(); }
+      if (data.success) { setMessage("Supprime avec succes !"); fetch(`${API}/${page}`, { headers: headers() }).then((r) => r.json()).then(setDonnees); chargerStats(); }
       else { setMessage("Erreur : " + data.error); }
     } catch (err) { setMessage("Erreur de connexion !"); }
   };
@@ -209,11 +266,11 @@ function App() {
     else if (page === "clients") url = `${API}/clients/${elementAModifier.id_client}`;
     else if (page === "fournisseurs") url = `${API}/fournisseurs/${elementAModifier.id_fournisseur}`;
     try {
-      const response = await fetch(url, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(elementAModifier) });
+      const response = await fetch(url, { method: "PUT", headers: headers(), body: JSON.stringify(elementAModifier) });
       const data = await response.json();
       if (data.id_produit || data.id_client || data.id_fournisseur) {
         setMessage("Modifie avec succes !"); setShowEditModal(false); setElementAModifier(null);
-        fetch(`${API}/${page}`).then((r) => r.json()).then(setDonnees); chargerStats();
+        fetch(`${API}/${page}`, { headers: headers() }).then((r) => r.json()).then(setDonnees); chargerStats();
       } else { setMessage("Erreur lors de la modification !"); }
     } catch (err) { setMessage("Erreur de connexion !"); }
   };
@@ -222,7 +279,7 @@ function App() {
     setBonEnEdition({ ...bonData, _type: type });
     setSaisieEditionDate("");
     const url = type === "entree" ? `${API}/bons-entree/${bonData.id_bon_entree}/lignes` : `${API}/bons-sortie/${bonData.id_bon_sortie}/lignes`;
-    const lignesData = await fetch(url).then((r) => r.json());
+    const lignesData = await fetch(url, { headers: headers() }).then((r) => r.json());
     setLignesEdition(lignesData.map((l) => ({ id_produit: l.id_produit, quantite: l.quantite, prix_unitaire: l.prix_unitaire })));
     setShowEditBon(true); setBonDetail(null);
   };
@@ -235,12 +292,12 @@ function App() {
       ? { numero_bon: bonEnEdition.numero_bon, date_bon: bonEnEdition.date_bon, id_fournisseur: bonEnEdition.id_fournisseur, observation: bonEnEdition.observation, lignes: lignesEdition }
       : { numero_bon: bonEnEdition.numero_bon, date_bon: bonEnEdition.date_bon, id_client: bonEnEdition.id_client, observation: bonEnEdition.observation, lignes: lignesEdition };
     try {
-      const response = await fetch(url, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const response = await fetch(url, { method: "PUT", headers: headers(), body: JSON.stringify(body) });
       const data = await response.json();
       if (data.success) {
         setMessage("Bon modifie avec succes !"); setShowEditBon(false); setBonEnEdition(null);
         const listeUrl = type === "entree" ? `${API}/bons-entree` : `${API}/bons-sortie`;
-        fetch(listeUrl).then((r) => r.json()).then(setDonnees); chargerStats();
+        fetch(listeUrl, { headers: headers() }).then((r) => r.json()).then(setDonnees); chargerStats();
       } else { setMessage("Erreur : " + data.error); }
     } catch (err) { setMessage("Erreur de connexion !"); }
   };
@@ -249,12 +306,12 @@ function App() {
     if (!window.confirm("Confirmer la suppression de ce bon ?")) return;
     const url = type === "entree" ? `${API}/bons-entree/${id}` : `${API}/bons-sortie/${id}`;
     try {
-      const response = await fetch(url, { method: "DELETE" });
+      const response = await fetch(url, { method: "DELETE", headers: headers() });
       const data = await response.json();
       if (data.success) {
         setMessage("Bon supprime avec succes !"); setBonDetail(null);
         const listeUrl = type === "entree" ? `${API}/bons-entree` : `${API}/bons-sortie`;
-        fetch(listeUrl).then((r) => r.json()).then(setDonnees); chargerStats();
+        fetch(listeUrl, { headers: headers() }).then((r) => r.json()).then(setDonnees); chargerStats();
       } else { setMessage("Erreur : " + data.error); }
     } catch (err) { setMessage("Erreur de connexion !"); }
   };
@@ -262,7 +319,7 @@ function App() {
   const voirDetailBon = async (bon, type) => {
     setBonDetail(bon);
     const url = type === "entree" ? `${API}/bons-entree/${bon.id_bon_entree}/lignes` : `${API}/bons-sortie/${bon.id_bon_sortie}/lignes`;
-    const lignes = await fetch(url).then((r) => r.json());
+    const lignes = await fetch(url, { headers: headers() }).then((r) => r.json());
     setLignesDetail(lignes);
   };
 
@@ -270,17 +327,16 @@ function App() {
     if (!produitSelectionne) return;
     setLoadingMouvements(true); setFicheMouvements(null);
     try {
-      const data = await fetch(`${API}/mouvements/${produitSelectionne}`).then((r) => r.json());
+      const data = await fetch(`${API}/mouvements/${produitSelectionne}`, { headers: headers() }).then((r) => r.json());
       setFicheMouvements(data);
     } catch (err) { setMessage("Erreur de chargement des mouvements !"); }
     setLoadingMouvements(false);
   };
 
-  // CHARGER STOCK INITIAL
   const chargerStockInitial = async () => {
     setLoadingStockInitial(true);
     try {
-      const data = await fetch(`${API}/stock-initial`).then((r) => r.json());
+      const data = await fetch(`${API}/stock-initial`, { headers: headers() }).then((r) => r.json());
       setStockInitialData(data);
       const edits = {};
       const dates = {};
@@ -294,7 +350,6 @@ function App() {
     setLoadingStockInitial(false);
   };
 
-  // ENREGISTRER STOCK INITIAL D'UN PRODUIT
   const enregistrerStockInitial = async (id_produit) => {
     const vals = stockInitialEdite[id_produit];
     const dateStr = stockInitialSaisieDates[id_produit];
@@ -303,44 +358,78 @@ function App() {
     const date_saisie = dateStr && dateValide(dateStr) ? parseFR(dateStr) : null;
     try {
       const response = await fetch(`${API}/stock-initial`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+        method: "POST", headers: headers(),
         body: JSON.stringify({ id_produit, quantite: vals.quantite, prix_unitaire: vals.prix_unitaire, date_saisie }),
       });
       const data = await response.json();
+      if (data.success) { setMessage("Stock initial enregistre avec succes !"); chargerStockInitial(); chargerStats(); }
+      else { setMessage("Erreur : " + data.error); }
+    } catch (err) { setMessage("Erreur de connexion !"); }
+  };
+
+  // GESTION UTILISATEURS
+  const chargerUtilisateurs = async () => {
+    setLoadingUtilisateurs(true);
+    try {
+      const data = await fetch(`${API}/utilisateurs`, { headers: headers() }).then((r) => r.json());
+      setUtilisateursData(data);
+    } catch (err) { setMessage("Erreur de chargement des utilisateurs !"); }
+    setLoadingUtilisateurs(false);
+  };
+
+  const ajouterUtilisateur = async () => {
+    if (!newUtilisateur.login || !newUtilisateur.mot_de_passe || !newUtilisateur.nom) { setMessage("Tous les champs sont obligatoires !"); return; }
+    try {
+      const response = await fetch(`${API}/utilisateurs`, { method: "POST", headers: headers(), body: JSON.stringify(newUtilisateur) });
+      const data = await response.json();
       if (data.success) {
-        setMessage("Stock initial enregistre avec succes !");
-        chargerStockInitial();
-        chargerStats();
+        setMessage("Utilisateur cree avec succes !"); setShowFormUtilisateur(false);
+        setNewUtilisateur({ login: "", mot_de_passe: "", nom: "", role: "utilisateur" });
+        chargerUtilisateurs();
       } else { setMessage("Erreur : " + data.error); }
+    } catch (err) { setMessage("Erreur de connexion !"); }
+  };
+
+  const modifierUtilisateur = async () => {
+    try {
+      const response = await fetch(`${API}/utilisateurs/${utilisateurAModifier.id_utilisateur}`, { method: "PUT", headers: headers(), body: JSON.stringify(utilisateurAModifier) });
+      const data = await response.json();
+      if (data.success) {
+        setMessage("Utilisateur modifie avec succes !"); setUtilisateurAModifier(null); chargerUtilisateurs();
+      } else { setMessage("Erreur : " + data.error); }
+    } catch (err) { setMessage("Erreur de connexion !"); }
+  };
+
+  const supprimerUtilisateur = async (id) => {
+    if (!window.confirm("Confirmer la suppression ?")) return;
+    try {
+      const response = await fetch(`${API}/utilisateurs/${id}`, { method: "DELETE", headers: headers() });
+      const data = await response.json();
+      if (data.success) { setMessage("Utilisateur supprime !"); chargerUtilisateurs(); }
+      else { setMessage("Erreur : " + data.error); }
     } catch (err) { setMessage("Erreur de connexion !"); }
   };
 
   useEffect(() => {
     if (page === "stock-initial") chargerStockInitial(); // eslint-disable-line react-hooks/exhaustive-deps
+    if (page === "utilisateurs") chargerUtilisateurs(); // eslint-disable-line react-hooks/exhaustive-deps
   }, [page]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const chargerFicheStock = async () => {
     let dateDebut, dateFin;
     if (ficheStockMode === "date") {
-      if (!ficheStockDatePrecise || !dateValide(ficheStockDatePrecise)) { setMessage("Veuillez saisir une date valide (jj/mm/aaaa) !"); return; }
-      dateDebut = parseFR(ficheStockDatePrecise);
-      dateFin = parseFR(ficheStockDatePrecise);
+      if (!ficheStockDatePrecise || !dateValide(ficheStockDatePrecise)) { setMessage("Veuillez saisir une date valide !"); return; }
+      dateDebut = parseFR(ficheStockDatePrecise); dateFin = parseFR(ficheStockDatePrecise);
     } else {
       if (!ficheStockDateDebut || !dateValide(ficheStockDateDebut)) { setMessage("Date debut invalide !"); return; }
       if (!ficheStockDateFin || !dateValide(ficheStockDateFin)) { setMessage("Date fin invalide !"); return; }
-      dateDebut = parseFR(ficheStockDateDebut);
-      dateFin = parseFR(ficheStockDateFin);
+      dateDebut = parseFR(ficheStockDateDebut); dateFin = parseFR(ficheStockDateFin);
     }
     setLoadingFicheStock(true); setFicheStockData(null);
     try {
-      const data = await fetch(`${API}/fiche-stock?date_debut=${dateDebut}&date_fin=${dateFin}`).then((r) => r.json());
-      setFicheStockData({
-        lignes: data,
-        dateDebut: ficheStockMode === "date" ? ficheStockDatePrecise : ficheStockDateDebut,
-        dateFin: ficheStockMode === "date" ? ficheStockDatePrecise : ficheStockDateFin
-      });
-    } catch (err) { setMessage("Erreur de chargement de la fiche de stock !"); }
+      const data = await fetch(`${API}/fiche-stock?date_debut=${dateDebut}&date_fin=${dateFin}`, { headers: headers() }).then((r) => r.json());
+      setFicheStockData({ lignes: data, dateDebut: ficheStockMode === "date" ? ficheStockDatePrecise : ficheStockDateDebut, dateFin: ficheStockMode === "date" ? ficheStockDatePrecise : ficheStockDateFin });
+    } catch (err) { setMessage("Erreur de chargement !"); }
     setLoadingFicheStock(false);
   };
 
@@ -353,19 +442,15 @@ function App() {
     doc.text("GESTION DE STOCK", 105, 13, { align: "center" });
     doc.setFontSize(13); doc.text("FICHE DE STOCK", 105, 23, { align: "center" });
     doc.setTextColor(0, 0, 0); doc.setFontSize(11); doc.setFont("helvetica", "bold");
-    if (ficheStockData.dateDebut === ficheStockData.dateFin) {
-      doc.text(`Date : ${ficheStockData.dateDebut}`, 15, 42);
-    } else {
-      doc.text(`Periode : du ${ficheStockData.dateDebut} au ${ficheStockData.dateFin}`, 15, 42);
-    }
+    if (ficheStockData.dateDebut === ficheStockData.dateFin) { doc.text(`Date : ${ficheStockData.dateDebut}`, 15, 42); }
+    else { doc.text(`Periode : du ${ficheStockData.dateDebut} au ${ficheStockData.dateFin}`, 15, 42); }
     doc.setDrawColor(...couleur); doc.setLineWidth(0.5); doc.line(15, 48, 195, 48);
     autoTable(doc, {
       startY: 53,
       head: [["Code", "Designation", "Unite", "Stock Initial", "Total Entrees", "Total Sorties", "Stock Disponible"]],
       body: ficheStockData.lignes.map((l) => [l.code_produit, l.designation, l.unite, Number(l.stock_initial).toFixed(2), Number(l.total_entrees).toFixed(2), Number(l.total_sorties).toFixed(2), Number(l.stock_disponible).toFixed(2)]),
       headStyles: { fillColor: couleur, textColor: 255, fontStyle: "bold" },
-      alternateRowStyles: { fillColor: [249, 249, 249] },
-      styles: { fontSize: 9, cellPadding: 3 },
+      alternateRowStyles: { fillColor: [249, 249, 249] }, styles: { fontSize: 9, cellPadding: 3 },
       columnStyles: { 0: { cellWidth: 20 }, 1: { cellWidth: 55 }, 2: { cellWidth: 18 }, 3: { cellWidth: 23, halign: "right" }, 4: { cellWidth: 23, halign: "right" }, 5: { cellWidth: 23, halign: "right" }, 6: { cellWidth: 28, halign: "right" } },
     });
     const pageHeight = doc.internal.pageSize.height;
@@ -378,15 +463,8 @@ function App() {
     if (!ficheMouvements) return [];
     const { stock_initial, entrees, sorties } = ficheMouvements;
     let lignesMouvements = [];
-    lignesMouvements.push({
-      date: stock_initial.date_saisie ? formatDateFR(stock_initial.date_saisie.substring(0, 10)) : "-",
-      numero_bon: "-", type: "Stock Initial", tiers: "-", entree: "-", sortie: "-",
-      stock: Number(stock_initial.quantite) || 0, _classe: "table-info fw-bold",
-    });
-    const mouvements = [
-      ...entrees.map((e) => ({ ...e, _type: "entree" })),
-      ...sorties.map((s) => ({ ...s, _type: "sortie" })),
-    ].sort((a, b) => new Date(a.date_bon) - new Date(b.date_bon));
+    lignesMouvements.push({ date: stock_initial.date_saisie ? formatDateFR(stock_initial.date_saisie.substring(0, 10)) : "-", numero_bon: "-", type: "Stock Initial", tiers: "-", entree: "-", sortie: "-", stock: Number(stock_initial.quantite) || 0, _classe: "table-info fw-bold" });
+    const mouvements = [...entrees.map((e) => ({ ...e, _type: "entree" })), ...sorties.map((s) => ({ ...s, _type: "sortie" }))].sort((a, b) => new Date(a.date_bon) - new Date(b.date_bon));
     let stockCourant = Number(stock_initial.quantite) || 0;
     mouvements.forEach((m) => {
       if (m._type === "entree") {
@@ -411,30 +489,18 @@ function App() {
     doc.text("GESTION DE STOCK", 148, 10, { align: "center" });
     doc.setFontSize(12); doc.text("FICHE DE MOUVEMENTS", 148, 20, { align: "center" });
     doc.setTextColor(0, 0, 0); doc.setFontSize(10); doc.setFont("helvetica", "bold");
-    doc.text(`Code : ${produit.code_produit}`, 15, 35);
-    doc.text(`Designation : ${produit.designation}`, 60, 35);
-    doc.text(`Unite : ${produit.unite}`, 150, 35);
-    doc.text(`Prix Achat : ${produit.prix_achat} MRU`, 185, 35);
-    doc.text(`Prix Vente : ${produit.prix_vente} MRU`, 237, 35);
+    doc.text(`Code : ${produit.code_produit}`, 15, 35); doc.text(`Designation : ${produit.designation}`, 60, 35);
+    doc.text(`Unite : ${produit.unite}`, 150, 35); doc.text(`Prix Achat : ${produit.prix_achat} MRU`, 185, 35); doc.text(`Prix Vente : ${produit.prix_vente} MRU`, 237, 35);
     doc.setDrawColor(...couleur); doc.setLineWidth(0.5); doc.line(15, 40, 282, 40);
     autoTable(doc, {
       startY: 45,
       head: [["Date", "N° Bon", "Type", "Fournisseur / Client", "Entree", "Sortie", "Stock"]],
       body: tableauLignes.map((l) => [l.date, l.numero_bon, l.type, l.tiers, l.entree !== "-" ? l.entree : "", l.sortie !== "-" ? l.sortie : "", l.stock]),
       foot: [["", "", "", "TOTAUX :", totaux.total_entrees, totaux.total_sorties, totaux.stock_final]],
-      headStyles: { fillColor: couleur, textColor: 255, fontStyle: "bold" },
-      footStyles: { fillColor: [40, 40, 40], textColor: 255, fontStyle: "bold" },
-      alternateRowStyles: { fillColor: [249, 249, 249] },
-      styles: { fontSize: 9, cellPadding: 3 },
+      headStyles: { fillColor: couleur, textColor: 255, fontStyle: "bold" }, footStyles: { fillColor: [40, 40, 40], textColor: 255, fontStyle: "bold" },
+      alternateRowStyles: { fillColor: [249, 249, 249] }, styles: { fontSize: 9, cellPadding: 3 },
       columnStyles: { 0: { cellWidth: 25 }, 1: { cellWidth: 25 }, 2: { cellWidth: 25 }, 3: { cellWidth: 90 }, 4: { cellWidth: 25, halign: "center" }, 5: { cellWidth: 25, halign: "center" }, 6: { cellWidth: 25, halign: "center" } },
-      didParseCell: (data) => {
-        if (data.section === "body") {
-          const type = tableauLignes[data.row.index]?.type;
-          if (type === "Stock Initial") data.cell.styles.fillColor = [217, 237, 247];
-          else if (type === "Entree") data.cell.styles.fillColor = [212, 237, 218];
-          else if (type === "Sortie") data.cell.styles.fillColor = [248, 215, 218];
-        }
-      },
+      didParseCell: (data) => { if (data.section === "body") { const type = tableauLignes[data.row.index]?.type; if (type === "Stock Initial") data.cell.styles.fillColor = [217, 237, 247]; else if (type === "Entree") data.cell.styles.fillColor = [212, 237, 218]; else if (type === "Sortie") data.cell.styles.fillColor = [248, 215, 218]; } },
     });
     const finalY = doc.lastAutoTable.finalY + 8;
     doc.setFontSize(10); doc.setFont("helvetica", "bold");
@@ -478,10 +544,8 @@ function App() {
       head: [["Code", "Designation", "Quantite", "Prix Unitaire", "Montant (MRU)"]],
       body: lignesDetail.map((l) => [l.code_produit || "-", l.designation || "-", l.quantite, formatMontant(l.prix_unitaire), formatMontant(l.montant)]),
       foot: [["", "", "", "TOTAL GENERAL :", formatMontant(totalGeneral) + " MRU"]],
-      headStyles: { fillColor: couleur, textColor: 255, fontStyle: "bold" },
-      footStyles: { fillColor: [240, 240, 240], textColor: 0, fontStyle: "bold" },
-      alternateRowStyles: { fillColor: [249, 249, 249] },
-      styles: { fontSize: 10, cellPadding: 4 },
+      headStyles: { fillColor: couleur, textColor: 255, fontStyle: "bold" }, footStyles: { fillColor: [240, 240, 240], textColor: 0, fontStyle: "bold" },
+      alternateRowStyles: { fillColor: [249, 249, 249] }, styles: { fontSize: 10, cellPadding: 4 },
       columnStyles: { 0: { cellWidth: 25 }, 1: { cellWidth: 70 }, 2: { cellWidth: 25, halign: "center" }, 3: { cellWidth: 35, halign: "right" }, 4: { cellWidth: 35, halign: "right" } },
     });
     const pageHeight = doc.internal.pageSize.height;
@@ -490,60 +554,129 @@ function App() {
     doc.save(`${titre.replace(" ", "_")}_${bonDetail.numero_bon}.pdf`);
   };
 
-  // PAGE STOCK INITIAL
+  // PAGE LOGIN
+  const renderLogin = () => (
+    <div className="min-vh-100 d-flex align-items-center justify-content-center bg-light">
+      <div className="card shadow" style={{ width: "400px" }}>
+        <div className="card-header bg-primary text-white text-center py-4">
+          <h3 className="mb-0">📦 Gestion de Stock</h3>
+          <small>Connectez-vous pour acceder</small>
+        </div>
+        <div className="card-body p-4">
+          {loginErreur && <div className="alert alert-danger">{loginErreur}</div>}
+          <div className="mb-3">
+            <label className="form-label fw-bold">Login</label>
+            <input type="text" className="form-control" placeholder="Votre login"
+              value={loginForm.login}
+              onChange={(e) => setLoginForm({ ...loginForm, login: e.target.value })}
+              onKeyDown={(e) => e.key === "Enter" && seConnecter()} />
+          </div>
+          <div className="mb-4">
+            <label className="form-label fw-bold">Mot de passe</label>
+            <input type="password" className="form-control" placeholder="Votre mot de passe"
+              value={loginForm.mot_de_passe}
+              onChange={(e) => setLoginForm({ ...loginForm, mot_de_passe: e.target.value })}
+              onKeyDown={(e) => e.key === "Enter" && seConnecter()} />
+          </div>
+          <button className="btn btn-primary w-100 btn-lg" onClick={seConnecter} disabled={loadingLogin}>
+            {loadingLogin ? <><span className="spinner-border spinner-border-sm me-2"></span>Connexion...</> : "🔐 Se Connecter"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  // PAGE GESTION UTILISATEURS
+  const renderUtilisateurs = () => (
+    <div>
+      <h4 className="mb-4">👥 Gestion des Utilisateurs</h4>
+      {message && (<div className={`alert ${message.includes("succes") ? "alert-success" : "alert-danger"} alert-dismissible`}>{message}<button className="btn-close" onClick={() => setMessage("")}></button></div>)}
+      <button className="btn btn-success mb-3" onClick={() => setShowFormUtilisateur(!showFormUtilisateur)}>
+        {showFormUtilisateur ? "Annuler" : "+ Nouvel Utilisateur"}
+      </button>
+      {showFormUtilisateur && (
+        <div className="card p-3 mb-3 border-success">
+          <h5 className="mb-3">Nouvel Utilisateur</h5>
+          <div className="row g-2">
+            <div className="col-md-3"><input className="form-control" placeholder="Login *" value={newUtilisateur.login} onChange={(e) => setNewUtilisateur({ ...newUtilisateur, login: e.target.value })} /></div>
+            <div className="col-md-3"><input className="form-control" placeholder="Nom complet *" value={newUtilisateur.nom} onChange={(e) => setNewUtilisateur({ ...newUtilisateur, nom: e.target.value })} /></div>
+            <div className="col-md-3"><input type="password" className="form-control" placeholder="Mot de passe *" value={newUtilisateur.mot_de_passe} onChange={(e) => setNewUtilisateur({ ...newUtilisateur, mot_de_passe: e.target.value })} /></div>
+            <div className="col-md-3">
+              <select className="form-select" value={newUtilisateur.role} onChange={(e) => setNewUtilisateur({ ...newUtilisateur, role: e.target.value })}>
+                <option value="utilisateur">Utilisateur</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+          </div>
+          <div className="mt-2"><button className="btn btn-success me-2" onClick={ajouterUtilisateur}>Enregistrer</button><button className="btn btn-secondary" onClick={() => setShowFormUtilisateur(false)}>Annuler</button></div>
+        </div>
+      )}
+      {loadingUtilisateurs ? (<div className="text-center"><div className="spinner-border text-primary"></div></div>) : (
+        <table className="table table-bordered table-hover">
+          <thead className="table-dark">
+            <tr><th>Login</th><th>Nom</th><th>Role</th><th>Statut</th><th>Actions</th></tr>
+          </thead>
+          <tbody>
+            {utilisateursData.map((u) => (
+              <tr key={u.id_utilisateur}>
+                <td>{u.login}</td>
+                <td>{u.nom}</td>
+                <td><span className={`badge ${u.role === "admin" ? "bg-danger" : "bg-primary"}`}>{u.role === "admin" ? "👑 Admin" : "👤 Utilisateur"}</span></td>
+                <td><span className={`badge ${u.actif ? "bg-success" : "bg-secondary"}`}>{u.actif ? "Actif" : "Inactif"}</span></td>
+                <td>
+                  <button className="btn btn-warning btn-sm me-2" onClick={() => setUtilisateurAModifier({ ...u, mot_de_passe: "" })}>✏️ Modifier</button>
+                  {u.login !== "admin" && <button className="btn btn-danger btn-sm" onClick={() => supprimerUtilisateur(u.id_utilisateur)}>🗑️ Supprimer</button>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {utilisateurAModifier && (
+        <div className="modal show d-block" style={{ backgroundColor: "rgba(0,0,0,0.5)" }}>
+          <div className="modal-dialog">
+            <div className="modal-content">
+              <div className="modal-header bg-warning">
+                <h5 className="modal-title">✏️ Modifier Utilisateur</h5>
+                <button className="btn-close" onClick={() => setUtilisateurAModifier(null)}></button>
+              </div>
+              <div className="modal-body">
+                <div className="mb-3"><label className="form-label">Login</label><input className="form-control" value={utilisateurAModifier.login} onChange={(e) => setUtilisateurAModifier({ ...utilisateurAModifier, login: e.target.value })} /></div>
+                <div className="mb-3"><label className="form-label">Nom</label><input className="form-control" value={utilisateurAModifier.nom} onChange={(e) => setUtilisateurAModifier({ ...utilisateurAModifier, nom: e.target.value })} /></div>
+                <div className="mb-3"><label className="form-label">Nouveau mot de passe (laisser vide pour ne pas changer)</label><input type="password" className="form-control" value={utilisateurAModifier.mot_de_passe} onChange={(e) => setUtilisateurAModifier({ ...utilisateurAModifier, mot_de_passe: e.target.value })} /></div>
+                <div className="mb-3"><label className="form-label">Role</label><select className="form-select" value={utilisateurAModifier.role} onChange={(e) => setUtilisateurAModifier({ ...utilisateurAModifier, role: e.target.value })}><option value="utilisateur">Utilisateur</option><option value="admin">Admin</option></select></div>
+                <div className="mb-3"><label className="form-label">Statut</label><select className="form-select" value={utilisateurAModifier.actif} onChange={(e) => setUtilisateurAModifier({ ...utilisateurAModifier, actif: e.target.value === "true" })}><option value="true">Actif</option><option value="false">Inactif</option></select></div>
+              </div>
+              <div className="modal-footer">
+                <button className="btn btn-secondary" onClick={() => setUtilisateurAModifier(null)}>Annuler</button>
+                <button className="btn btn-warning" onClick={modifierUtilisateur}>💾 Enregistrer</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
   const renderStockInitial = () => (
     <div>
       <h4 className="mb-4">📦 Saisie du Stock Initial</h4>
-      <div className="alert alert-info">
-        <strong>ℹ️ Information :</strong> Le stock initial représente la quantité de départ de chaque produit avant tout mouvement. Il est utilisé dans la Fiche de Mouvements et la Fiche de Stock.
-      </div>
+      <div className="alert alert-info"><strong>ℹ️ Information :</strong> Le stock initial représente la quantité de départ de chaque produit avant tout mouvement.</div>
       {message && (<div className={`alert ${message.includes("succes") ? "alert-success" : "alert-danger"} alert-dismissible`}>{message}<button className="btn-close" onClick={() => setMessage("")}></button></div>)}
-      {loadingStockInitial ? (
-        <div className="text-center my-4"><div className="spinner-border text-primary"></div><p className="mt-2">Chargement...</p></div>
-      ) : (
+      {loadingStockInitial ? (<div className="text-center my-4"><div className="spinner-border text-primary"></div></div>) : (
         <div className="card p-0">
           <table className="table table-bordered table-hover mb-0">
             <thead className="table-dark">
-              <tr>
-                <th>Code</th>
-                <th>Designation</th>
-                <th>Unite</th>
-                <th className="text-center">Quantite Initiale</th>
-                <th className="text-center">Prix Unitaire (MRU)</th>
-                <th className="text-center">Date Saisie (jj/mm/aaaa)</th>
-                <th className="text-center">Action</th>
-              </tr>
+              <tr><th>Code</th><th>Designation</th><th>Unite</th><th className="text-center">Quantite Initiale</th><th className="text-center">Prix Unitaire (MRU)</th><th className="text-center">Date Saisie (jj/mm/aaaa)</th><th className="text-center">Action</th></tr>
             </thead>
             <tbody>
               {stockInitialData.map((p) => (
                 <tr key={p.id_produit} className={Number(stockInitialEdite[p.id_produit]?.quantite) > 0 ? "table-success" : ""}>
-                  <td><strong>{p.code_produit}</strong></td>
-                  <td>{p.designation}</td>
-                  <td>{p.unite}</td>
-                  <td className="text-center">
-                    <input type="number" className="form-control form-control-sm text-center" min="0"
-                      style={{ width: "100px", margin: "auto" }}
-                      value={stockInitialEdite[p.id_produit]?.quantite || 0}
-                      onChange={(e) => setStockInitialEdite({ ...stockInitialEdite, [p.id_produit]: { ...stockInitialEdite[p.id_produit], quantite: e.target.value } })} />
-                  </td>
-                  <td className="text-center">
-                    <input type="number" className="form-control form-control-sm text-center" min="0"
-                      style={{ width: "120px", margin: "auto" }}
-                      value={stockInitialEdite[p.id_produit]?.prix_unitaire || 0}
-                      onChange={(e) => setStockInitialEdite({ ...stockInitialEdite, [p.id_produit]: { ...stockInitialEdite[p.id_produit], prix_unitaire: e.target.value } })} />
-                  </td>
-                  <td className="text-center">
-                    <input type="text" placeholder="jj/mm/aaaa" maxLength={10}
-                      className={`form-control form-control-sm text-center ${stockInitialSaisieDates[p.id_produit] && !dateValide(stockInitialSaisieDates[p.id_produit]) ? "is-invalid" : stockInitialSaisieDates[p.id_produit] && dateValide(stockInitialSaisieDates[p.id_produit]) ? "is-valid" : ""}`}
-                      style={{ width: "130px", margin: "auto" }}
-                      value={stockInitialSaisieDates[p.id_produit] || ""}
-                      onChange={(e) => setStockInitialSaisieDates({ ...stockInitialSaisieDates, [p.id_produit]: e.target.value })} />
-                  </td>
-                  <td className="text-center">
-                    <button className="btn btn-success btn-sm" onClick={() => enregistrerStockInitial(p.id_produit)}>
-                      💾 Enregistrer
-                    </button>
-                  </td>
+                  <td><strong>{p.code_produit}</strong></td><td>{p.designation}</td><td>{p.unite}</td>
+                  <td className="text-center"><input type="number" className="form-control form-control-sm text-center" min="0" style={{ width: "100px", margin: "auto" }} value={stockInitialEdite[p.id_produit]?.quantite || 0} onChange={(e) => setStockInitialEdite({ ...stockInitialEdite, [p.id_produit]: { ...stockInitialEdite[p.id_produit], quantite: e.target.value } })} /></td>
+                  <td className="text-center"><input type="number" className="form-control form-control-sm text-center" min="0" style={{ width: "120px", margin: "auto" }} value={stockInitialEdite[p.id_produit]?.prix_unitaire || 0} onChange={(e) => setStockInitialEdite({ ...stockInitialEdite, [p.id_produit]: { ...stockInitialEdite[p.id_produit], prix_unitaire: e.target.value } })} /></td>
+                  <td className="text-center"><input type="text" placeholder="jj/mm/aaaa" maxLength={10} className={`form-control form-control-sm text-center ${stockInitialSaisieDates[p.id_produit] && !dateValide(stockInitialSaisieDates[p.id_produit]) ? "is-invalid" : stockInitialSaisieDates[p.id_produit] && dateValide(stockInitialSaisieDates[p.id_produit]) ? "is-valid" : ""}`} style={{ width: "130px", margin: "auto" }} value={stockInitialSaisieDates[p.id_produit] || ""} onChange={(e) => setStockInitialSaisieDates({ ...stockInitialSaisieDates, [p.id_produit]: e.target.value })} /></td>
+                  <td className="text-center"><button className="btn btn-success btn-sm" onClick={() => enregistrerStockInitial(p.id_produit)}>💾 Enregistrer</button></td>
                 </tr>
               ))}
             </tbody>
@@ -568,55 +701,35 @@ function App() {
           {ficheStockMode === "date" ? (
             <div className="col-md-3">
               <label className="form-label fw-bold">Date (jj/mm/aaaa)</label>
-              <input type="text" className={`form-control ${ficheStockDatePrecise && !dateValide(ficheStockDatePrecise) ? "is-invalid" : ficheStockDatePrecise && dateValide(ficheStockDatePrecise) ? "is-valid" : ""}`}
-                placeholder="jj/mm/aaaa" maxLength={10} value={ficheStockDatePrecise}
-                onChange={(e) => { setFicheStockDatePrecise(e.target.value); setFicheStockData(null); }} />
+              <input type="text" className={`form-control ${ficheStockDatePrecise && !dateValide(ficheStockDatePrecise) ? "is-invalid" : ficheStockDatePrecise && dateValide(ficheStockDatePrecise) ? "is-valid" : ""}`} placeholder="jj/mm/aaaa" maxLength={10} value={ficheStockDatePrecise} onChange={(e) => { setFicheStockDatePrecise(e.target.value); setFicheStockData(null); }} />
               {ficheStockDatePrecise && !dateValide(ficheStockDatePrecise) && <div className="invalid-feedback">Date invalide (ex: 19/05/2026)</div>}
             </div>
           ) : (
             <>
               <div className="col-md-3">
                 <label className="form-label fw-bold">Date Debut (jj/mm/aaaa)</label>
-                <input type="text" className={`form-control ${ficheStockDateDebut && !dateValide(ficheStockDateDebut) ? "is-invalid" : ficheStockDateDebut && dateValide(ficheStockDateDebut) ? "is-valid" : ""}`}
-                  placeholder="jj/mm/aaaa" maxLength={10} value={ficheStockDateDebut}
-                  onChange={(e) => { setFicheStockDateDebut(e.target.value); setFicheStockData(null); }} />
-                {ficheStockDateDebut && !dateValide(ficheStockDateDebut) && <div className="invalid-feedback">Date invalide (ex: 01/01/2026)</div>}
+                <input type="text" className={`form-control ${ficheStockDateDebut && !dateValide(ficheStockDateDebut) ? "is-invalid" : ficheStockDateDebut && dateValide(ficheStockDateDebut) ? "is-valid" : ""}`} placeholder="jj/mm/aaaa" maxLength={10} value={ficheStockDateDebut} onChange={(e) => { setFicheStockDateDebut(e.target.value); setFicheStockData(null); }} />
+                {ficheStockDateDebut && !dateValide(ficheStockDateDebut) && <div className="invalid-feedback">Date invalide</div>}
               </div>
               <div className="col-md-3">
                 <label className="form-label fw-bold">Date Fin (jj/mm/aaaa)</label>
-                <input type="text" className={`form-control ${ficheStockDateFin && !dateValide(ficheStockDateFin) ? "is-invalid" : ficheStockDateFin && dateValide(ficheStockDateFin) ? "is-valid" : ""}`}
-                  placeholder="jj/mm/aaaa" maxLength={10} value={ficheStockDateFin}
-                  onChange={(e) => { setFicheStockDateFin(e.target.value); setFicheStockData(null); }} />
-                {ficheStockDateFin && !dateValide(ficheStockDateFin) && <div className="invalid-feedback">Date invalide (ex: 31/12/2026)</div>}
+                <input type="text" className={`form-control ${ficheStockDateFin && !dateValide(ficheStockDateFin) ? "is-invalid" : ficheStockDateFin && dateValide(ficheStockDateFin) ? "is-valid" : ""}`} placeholder="jj/mm/aaaa" maxLength={10} value={ficheStockDateFin} onChange={(e) => { setFicheStockDateFin(e.target.value); setFicheStockData(null); }} />
+                {ficheStockDateFin && !dateValide(ficheStockDateFin) && <div className="invalid-feedback">Date invalide</div>}
               </div>
             </>
           )}
-          <div className="col-md-3">
-            <button className="btn btn-primary w-100" onClick={chargerFicheStock}>🔍 Afficher la Fiche</button>
-          </div>
+          <div className="col-md-3"><button className="btn btn-primary w-100" onClick={chargerFicheStock}>🔍 Afficher la Fiche</button></div>
         </div>
       </div>
-      {loadingFicheStock && (<div className="text-center my-4"><div className="spinner-border text-primary"></div><p className="mt-2">Chargement...</p></div>)}
+      {loadingFicheStock && (<div className="text-center my-4"><div className="spinner-border text-primary"></div></div>)}
       {ficheStockData && !loadingFicheStock && (
         <div className="card p-4">
           <div className="d-flex justify-content-between align-items-center mb-3">
-            <h5 className="text-primary">
-              {ficheStockData.dateDebut === ficheStockData.dateFin
-                ? `📅 Stock au ${ficheStockData.dateDebut}`
-                : `📅 Stock du ${ficheStockData.dateDebut} au ${ficheStockData.dateFin}`}
-            </h5>
+            <h5 className="text-primary">{ficheStockData.dateDebut === ficheStockData.dateFin ? `📅 Stock au ${ficheStockData.dateDebut}` : `📅 Stock du ${ficheStockData.dateDebut} au ${ficheStockData.dateFin}`}</h5>
             <button className="btn btn-success" onClick={imprimerFicheStockPDF}>🖨️ Imprimer PDF</button>
           </div>
           <table className="table table-bordered table-striped table-hover">
-            <thead className="table-dark">
-              <tr>
-                <th>Code</th><th>Designation</th><th>Unite</th>
-                <th className="text-center text-info">Stock Initial</th>
-                <th className="text-center text-success">Total Entrees</th>
-                <th className="text-center text-danger">Total Sorties</th>
-                <th className="text-center text-primary fw-bold">Stock Disponible</th>
-              </tr>
-            </thead>
+            <thead className="table-dark"><tr><th>Code</th><th>Designation</th><th>Unite</th><th className="text-center text-info">Stock Initial</th><th className="text-center text-success">Total Entrees</th><th className="text-center text-danger">Total Sorties</th><th className="text-center text-primary fw-bold">Stock Disponible</th></tr></thead>
             <tbody>
               {ficheStockData.lignes.map((l, i) => (
                 <tr key={i} className={Number(l.stock_disponible) <= 0 ? "table-danger" : ""}>
@@ -624,9 +737,7 @@ function App() {
                   <td className="text-center">{Number(l.stock_initial).toFixed(2)}</td>
                   <td className="text-center text-success fw-bold">+{Number(l.total_entrees).toFixed(2)}</td>
                   <td className="text-center text-danger fw-bold">-{Number(l.total_sorties).toFixed(2)}</td>
-                  <td className={`text-center fw-bold ${Number(l.stock_disponible) <= 0 ? "text-danger" : "text-primary"}`}>
-                    {Number(l.stock_disponible).toFixed(2)}
-                  </td>
+                  <td className={`text-center fw-bold ${Number(l.stock_disponible) <= 0 ? "text-danger" : "text-primary"}`}>{Number(l.stock_disponible).toFixed(2)}</td>
                 </tr>
               ))}
             </tbody>
@@ -648,9 +759,7 @@ function App() {
               {produits.map((p) => (<option key={p.id_produit} value={p.id_produit}>{p.code_produit} — {p.designation}</option>))}
             </select>
           </div>
-          <div className="col-md-3">
-            <button className="btn btn-primary w-100" onClick={chargerMouvements} disabled={!produitSelectionne}>🔍 Afficher les Mouvements</button>
-          </div>
+          <div className="col-md-3"><button className="btn btn-primary w-100" onClick={chargerMouvements} disabled={!produitSelectionne}>🔍 Afficher les Mouvements</button></div>
         </div>
       </div>
       {loadingMouvements && (<div className="text-center my-4"><div className="spinner-border text-primary"></div></div>)}
@@ -670,18 +779,12 @@ function App() {
               <button className="btn btn-success text-nowrap" onClick={imprimerMouvementsPDF}>🖨️ Imprimer PDF</button>
             </div>
             <table className="table table-bordered table-hover">
-              <thead className="table-dark">
-                <tr><th>Date</th><th>N° Bon</th><th>Type</th><th>Fournisseur / Client</th><th className="text-center">Entree</th><th className="text-center">Sortie</th><th className="text-center">Stock</th></tr>
-              </thead>
+              <thead className="table-dark"><tr><th>Date</th><th>N° Bon</th><th>Type</th><th>Fournisseur / Client</th><th className="text-center">Entree</th><th className="text-center">Sortie</th><th className="text-center">Stock</th></tr></thead>
               <tbody>
                 {tableauLignes.map((ligne, i) => (
                   <tr key={i} className={ligne._classe}>
                     <td>{ligne.date}</td><td>{ligne.numero_bon}</td>
-                    <td>
-                      {ligne.type === "Stock Initial" && <span className="badge bg-info text-dark">📦 Stock Initial</span>}
-                      {ligne.type === "Entree" && <span className="badge bg-success">⬆️ Entree</span>}
-                      {ligne.type === "Sortie" && <span className="badge bg-danger">⬇️ Sortie</span>}
-                    </td>
+                    <td>{ligne.type === "Stock Initial" && <span className="badge bg-info text-dark">📦 Stock Initial</span>}{ligne.type === "Entree" && <span className="badge bg-success">⬆️ Entree</span>}{ligne.type === "Sortie" && <span className="badge bg-danger">⬇️ Sortie</span>}</td>
                     <td>{ligne.tiers}</td>
                     <td className="text-center fw-bold text-success">{ligne.entree !== "-" ? ligne.entree : ""}</td>
                     <td className="text-center fw-bold text-danger">{ligne.sortie !== "-" ? ligne.sortie : ""}</td>
@@ -689,14 +792,7 @@ function App() {
                   </tr>
                 ))}
               </tbody>
-              <tfoot className="table-dark fw-bold">
-                <tr>
-                  <td colSpan="4" className="text-end">TOTAUX :</td>
-                  <td className="text-center text-success">{totaux.total_entrees}</td>
-                  <td className="text-center text-danger">{totaux.total_sorties}</td>
-                  <td className="text-center text-warning">{totaux.stock_final}</td>
-                </tr>
-              </tfoot>
+              <tfoot className="table-dark fw-bold"><tr><td colSpan="4" className="text-end">TOTAUX :</td><td className="text-center text-success">{totaux.total_entrees}</td><td className="text-center text-danger">{totaux.total_sorties}</td><td className="text-center text-warning">{totaux.stock_final}</td></tr></tfoot>
             </table>
             <div className="row mt-3">
               <div className="col-md-3"><div className="card text-white bg-info text-center p-2"><small>Stock Initial</small><h4>{totaux.qte_initiale}</h4></div></div>
@@ -757,6 +853,7 @@ function App() {
     "liste-entree": "Liste des Bons d'Entree", "liste-sortie": "Liste des Bons de Sortie",
     "graphiques": "Graphiques", "mouvements": "Fiche Mouvements",
     "fiche-stock": "Fiche de Stock", "stock-initial": "Stock Initial",
+    ...(isAdmin ? { "utilisateurs": "Utilisateurs" } : {}),
   };
 
   const donneesFiltrees = donnees.filter((d) => Object.values(d).some((v) => String(v).toLowerCase().includes(recherche.toLowerCase())));
@@ -807,9 +904,7 @@ function App() {
         <div className="col-md-4"><label className="form-label">Numero Bon *</label><input type="text" className="form-control" value={bon.numero_bon} onChange={(e) => setBon({ ...bon, numero_bon: e.target.value })} /></div>
         <div className="col-md-4">
           <label className="form-label">Date * (jj/mm/aaaa)</label>
-          <input type="text" className={`form-control ${saisieDate && !dateValide(saisieDate) ? "is-invalid" : saisieDate && dateValide(saisieDate) ? "is-valid" : ""}`}
-            placeholder="jj/mm/aaaa" maxLength={10} value={saisieDate}
-            onChange={(e) => { setSaisieDate(e.target.value); if (dateValide(e.target.value)) setBon({ ...bon, date_bon: parseFR(e.target.value) }); }} />
+          <input type="text" className={`form-control ${saisieDate && !dateValide(saisieDate) ? "is-invalid" : saisieDate && dateValide(saisieDate) ? "is-valid" : ""}`} placeholder="jj/mm/aaaa" maxLength={10} value={saisieDate} onChange={(e) => { setSaisieDate(e.target.value); if (dateValide(e.target.value)) setBon({ ...bon, date_bon: parseFR(e.target.value) }); }} />
           {saisieDate && !dateValide(saisieDate) && <div className="invalid-feedback">Date invalide (ex: 19/05/2026)</div>}
         </div>
         <div className="col-md-4">
@@ -840,9 +935,7 @@ function App() {
           <div className="col-md-4"><label className="form-label">Numero Bon *</label><input type="text" className="form-control" value={bonEnEdition.numero_bon} onChange={(e) => setBonEnEdition({ ...bonEnEdition, numero_bon: e.target.value })} /></div>
           <div className="col-md-4">
             <label className="form-label">Date * (jj/mm/aaaa)</label>
-            <input type="text" className="form-control" placeholder="jj/mm/aaaa" maxLength={10}
-              value={saisieEditionDate || (bonEnEdition.date_bon ? formatDateFR(bonEnEdition.date_bon.substring(0, 10)) : "")}
-              onChange={(e) => { setSaisieEditionDate(e.target.value); if (dateValide(e.target.value)) setBonEnEdition({ ...bonEnEdition, date_bon: parseFR(e.target.value) }); }} />
+            <input type="text" className="form-control" placeholder="jj/mm/aaaa" maxLength={10} value={saisieEditionDate || (bonEnEdition.date_bon ? formatDateFR(bonEnEdition.date_bon.substring(0, 10)) : "")} onChange={(e) => { setSaisieEditionDate(e.target.value); if (dateValide(e.target.value)) setBonEnEdition({ ...bonEnEdition, date_bon: parseFR(e.target.value) }); }} />
           </div>
           <div className="col-md-4">
             {type === "entree" ? (<><label className="form-label">Fournisseur *</label><select className="form-select" value={bonEnEdition.id_fournisseur} onChange={(e) => setBonEnEdition({ ...bonEnEdition, id_fournisseur: e.target.value })}><option value="">-- Choisir --</option>{fournisseurs.map((f) => <option key={f.id_fournisseur} value={f.id_fournisseur}>{f.nom}</option>)}</select></>) : (<><label className="form-label">Client *</label><select className="form-select" value={bonEnEdition.id_client} onChange={(e) => setBonEnEdition({ ...bonEnEdition, id_client: e.target.value })}><option value="">-- Choisir --</option>{clients.map((c) => <option key={c.id_client} value={c.id_client}>{c.nom}</option>)}</select></>)}
@@ -868,8 +961,8 @@ function App() {
             <h5>Detail du Bon : {bonDetail.numero_bon}</h5>
             <div>
               <button className="btn btn-success me-2" onClick={() => imprimerBonPDF(type)}>🖨️ Imprimer PDF</button>
-              <button className="btn btn-warning me-2" onClick={() => ouvrirModificationBon(bonDetail, type)}>✏️ Modifier</button>
-              <button className="btn btn-danger me-2" onClick={() => supprimerBon(type === "entree" ? bonDetail.id_bon_entree : bonDetail.id_bon_sortie, type)}>🗑️ Supprimer</button>
+              {isAdmin && <button className="btn btn-warning me-2" onClick={() => ouvrirModificationBon(bonDetail, type)}>✏️ Modifier</button>}
+              {isAdmin && <button className="btn btn-danger me-2" onClick={() => supprimerBon(type === "entree" ? bonDetail.id_bon_entree : bonDetail.id_bon_sortie, type)}>🗑️ Supprimer</button>}
               <button className="btn btn-secondary" onClick={() => setBonDetail(null)}>Retour</button>
             </div>
           </div>
@@ -892,7 +985,11 @@ function App() {
           {loading ? (<div className="text-center"><div className="spinner-border text-primary"></div></div>) : (
             <table className="table table-bordered table-striped table-hover">
               <thead className="table-dark"><tr>{colonnes[page].map((col) => <th key={col}>{col.replace(/_/g, " ").toUpperCase()}</th>)}<th>ACTIONS</th></tr></thead>
-              <tbody>{donneesFiltrees.map((d, i) => (<tr key={i}>{colonnes[page].map((col) => <td key={col}>{col.includes("date") ? formatDateFR(d[col]?.substring(0, 10)) : d[col]}</td>)}<td className="text-center"><button className="btn btn-primary btn-sm me-2" onClick={() => voirDetailBon(d, type)}>Detail</button><button className="btn btn-warning btn-sm me-2" onClick={() => ouvrirModificationBon(d, type)}>✏️ Modifier</button><button className="btn btn-danger btn-sm" onClick={() => supprimerBon(type === "entree" ? d.id_bon_entree : d.id_bon_sortie, type)}>🗑️ Supprimer</button></td></tr>))}</tbody>
+              <tbody>{donneesFiltrees.map((d, i) => (<tr key={i}>{colonnes[page].map((col) => <td key={col}>{col.includes("date") ? formatDateFR(d[col]?.substring(0, 10)) : d[col]}</td>)}<td className="text-center">
+                <button className="btn btn-primary btn-sm me-2" onClick={() => voirDetailBon(d, type)}>Detail</button>
+                {isAdmin && <button className="btn btn-warning btn-sm me-2" onClick={() => ouvrirModificationBon(d, type)}>✏️ Modifier</button>}
+                {isAdmin && <button className="btn btn-danger btn-sm" onClick={() => supprimerBon(type === "entree" ? d.id_bon_entree : d.id_bon_sortie, type)}>🗑️ Supprimer</button>}
+              </td></tr>))}</tbody>
             </table>
           )}
         </>
@@ -900,10 +997,20 @@ function App() {
     </>
   );
 
+  // AFFICHER LOGIN SI PAS CONNECTE
+  if (!token) return renderLogin();
+
   return (
     <div>
-      <nav className="navbar navbar-dark bg-primary px-4 mb-4">
+      <nav className="navbar navbar-dark bg-primary px-4 mb-4 d-flex justify-content-between">
         <span className="navbar-brand fw-bold fs-4">📦 Gestion de Stock</span>
+        <div className="d-flex align-items-center">
+          <span className="text-white me-3">
+            {isAdmin ? "👑" : "👤"} <strong>{utilisateur?.nom}</strong>
+            <span className={`badge ms-2 ${isAdmin ? "bg-warning text-dark" : "bg-light text-dark"}`}>{isAdmin ? "Admin" : "Utilisateur"}</span>
+          </span>
+          <button className="btn btn-outline-light btn-sm" onClick={seDeconnecter}>🚪 Deconnexion</button>
+        </div>
       </nav>
 
       {totalAlertes > 0 && (
@@ -965,7 +1072,7 @@ function App() {
           {Object.keys(titres).map((p) => (
             <button key={p} onClick={() => { setPage(p); resetBon(); setBonDetail(null); setShowEditBon(false); setFicheMouvements(null); setProduitSelectionne(""); setFicheStockData(null); }}
               className={`btn me-2 mb-2 ${page === p ? "btn-primary" : "btn-secondary"}`}>
-              {p === "graphiques" ? "📊 " : p === "mouvements" ? "📋 " : p === "fiche-stock" ? "📊 " : p === "stock-initial" ? "📦 " : ""}{titres[p]}
+              {p === "graphiques" ? "📊 " : p === "mouvements" ? "📋 " : p === "fiche-stock" ? "📊 " : p === "stock-initial" ? "📦 " : p === "utilisateurs" ? "👥 " : ""}{titres[p]}
             </button>
           ))}
         </div>
@@ -974,6 +1081,7 @@ function App() {
           : page === "mouvements" ? renderMouvements()
           : page === "fiche-stock" ? renderFicheStock()
           : page === "stock-initial" ? renderStockInitial()
+          : page === "utilisateurs" && isAdmin ? renderUtilisateurs()
           : page === "bon-entree" ? renderFormulaireBon("bon-entree")
           : page === "bon-sortie" ? renderFormulaireBon("bon-sortie")
           : page === "liste-entree" ? renderListeBons("entree")
@@ -990,14 +1098,18 @@ function App() {
               {loading ? (<div className="text-center"><div className="spinner-border text-primary"></div></div>) : (
                 <table className="table table-bordered table-striped table-hover">
                   <thead className="table-dark"><tr>{colonnes[page] && colonnes[page].map((col) => (<th key={col}>{col.replace(/_/g, " ").toUpperCase()}</th>))}{["produits", "clients", "fournisseurs"].includes(page) && <th>ACTIONS</th>}</tr></thead>
-                  <tbody>{donneesFiltrees.map((d, i) => (<tr key={i}>{colonnes[page] && colonnes[page].map((col) => (<td key={col}>{d[col]}</td>))}{["produits", "clients", "fournisseurs"].includes(page) && (<td className="text-center"><button className="btn btn-warning btn-sm me-2" onClick={() => ouvrirModification(d)}>✏️ Modifier</button><button className="btn btn-danger btn-sm" onClick={() => supprimerElement(d[idCols[page]])}>🗑️ Supprimer</button></td>)}</tr>))}</tbody>
+                  <tbody>{donneesFiltrees.map((d, i) => (<tr key={i}>{colonnes[page] && colonnes[page].map((col) => (<td key={col}>{d[col]}</td>))}{["produits", "clients", "fournisseurs"].includes(page) && (<td className="text-center">
+                    {isAdmin && <button className="btn btn-warning btn-sm me-2" onClick={() => ouvrirModification(d)}>✏️ Modifier</button>}
+                    {isAdmin && <button className="btn btn-danger btn-sm" onClick={() => supprimerElement(d[idCols[page]])}>🗑️ Supprimer</button>}
+                    {!isAdmin && <span className="text-muted small">Consultation seulement</span>}
+                  </td>)}</tr>))}</tbody>
                 </table>
               )}
             </>
           )}
       </div>
 
-      {showEditModal && elementAModifier && (
+      {showEditModal && elementAModifier && isAdmin && (
         <div className="modal show d-block" style={{ backgroundColor: "rgba(0,0,0,0.5)" }}>
           <div className="modal-dialog modal-lg">
             <div className="modal-content">
