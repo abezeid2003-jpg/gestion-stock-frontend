@@ -47,6 +47,12 @@ function App() {
   const [saisieDate, setSaisieDate] = useState("");
   const [saisieEditionDate, setSaisieEditionDate] = useState("");
 
+  // ETATS STOCK INITIAL
+  const [stockInitialData, setStockInitialData] = useState([]);
+  const [loadingStockInitial, setLoadingStockInitial] = useState(false);
+  const [stockInitialEdite, setStockInitialEdite] = useState({});
+  const [stockInitialSaisieDates, setStockInitialSaisieDates] = useState({});
+
   const chargerStats = () => {
     Promise.all([
       fetch(`${API}/produits`).then((r) => r.json()),
@@ -70,7 +76,7 @@ function App() {
   useEffect(() => { chargerStats(); }, []);
 
   useEffect(() => {
-    if (["bon-entree", "bon-sortie", "mouvements", "fiche-stock"].includes(page)) return;
+    if (["bon-entree", "bon-sortie", "mouvements", "fiche-stock", "stock-initial"].includes(page)) return;
     setLoading(true);
     setDonnees([]);
     setRecherche("");
@@ -270,6 +276,50 @@ function App() {
     setLoadingMouvements(false);
   };
 
+  // CHARGER STOCK INITIAL
+  const chargerStockInitial = async () => {
+    setLoadingStockInitial(true);
+    try {
+      const data = await fetch(`${API}/stock-initial`).then((r) => r.json());
+      setStockInitialData(data);
+      const edits = {};
+      const dates = {};
+      data.forEach((p) => {
+        edits[p.id_produit] = { quantite: p.quantite || 0, prix_unitaire: p.prix_unitaire || 0 };
+        dates[p.id_produit] = p.date_saisie ? formatDateFR(p.date_saisie.substring(0, 10)) : "";
+      });
+      setStockInitialEdite(edits);
+      setStockInitialSaisieDates(dates);
+    } catch (err) { setMessage("Erreur de chargement du stock initial !"); }
+    setLoadingStockInitial(false);
+  };
+
+  // ENREGISTRER STOCK INITIAL D'UN PRODUIT
+  const enregistrerStockInitial = async (id_produit) => {
+    const vals = stockInitialEdite[id_produit];
+    const dateStr = stockInitialSaisieDates[id_produit];
+    if (!vals) return;
+    if (dateStr && !dateValide(dateStr)) { setMessage("Date invalide pour ce produit !"); return; }
+    const date_saisie = dateStr && dateValide(dateStr) ? parseFR(dateStr) : null;
+    try {
+      const response = await fetch(`${API}/stock-initial`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id_produit, quantite: vals.quantite, prix_unitaire: vals.prix_unitaire, date_saisie }),
+      });
+      const data = await response.json();
+      if (data.success) {
+        setMessage("Stock initial enregistre avec succes !");
+        chargerStockInitial();
+        chargerStats();
+      } else { setMessage("Erreur : " + data.error); }
+    } catch (err) { setMessage("Erreur de connexion !"); }
+  };
+
+  useEffect(() => {
+    if (page === "stock-initial") chargerStockInitial(); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [page]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const chargerFicheStock = async () => {
     let dateDebut, dateFin;
     if (ficheStockMode === "date") {
@@ -298,15 +348,11 @@ function App() {
     if (!ficheStockData) return;
     const doc = new jsPDF();
     const couleur = [13, 110, 253];
-    doc.setFillColor(...couleur);
-    doc.rect(0, 0, 210, 30, "F");
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(20); doc.setFont("helvetica", "bold");
+    doc.setFillColor(...couleur); doc.rect(0, 0, 210, 30, "F");
+    doc.setTextColor(255, 255, 255); doc.setFontSize(20); doc.setFont("helvetica", "bold");
     doc.text("GESTION DE STOCK", 105, 13, { align: "center" });
-    doc.setFontSize(13);
-    doc.text("FICHE DE STOCK", 105, 23, { align: "center" });
-    doc.setTextColor(0, 0, 0);
-    doc.setFontSize(11); doc.setFont("helvetica", "bold");
+    doc.setFontSize(13); doc.text("FICHE DE STOCK", 105, 23, { align: "center" });
+    doc.setTextColor(0, 0, 0); doc.setFontSize(11); doc.setFont("helvetica", "bold");
     if (ficheStockData.dateDebut === ficheStockData.dateFin) {
       doc.text(`Date : ${ficheStockData.dateDebut}`, 15, 42);
     } else {
@@ -316,21 +362,11 @@ function App() {
     autoTable(doc, {
       startY: 53,
       head: [["Code", "Designation", "Unite", "Stock Initial", "Total Entrees", "Total Sorties", "Stock Disponible"]],
-      body: ficheStockData.lignes.map((l) => [
-        l.code_produit, l.designation, l.unite,
-        Number(l.stock_initial).toFixed(2),
-        Number(l.total_entrees).toFixed(2),
-        Number(l.total_sorties).toFixed(2),
-        Number(l.stock_disponible).toFixed(2),
-      ]),
+      body: ficheStockData.lignes.map((l) => [l.code_produit, l.designation, l.unite, Number(l.stock_initial).toFixed(2), Number(l.total_entrees).toFixed(2), Number(l.total_sorties).toFixed(2), Number(l.stock_disponible).toFixed(2)]),
       headStyles: { fillColor: couleur, textColor: 255, fontStyle: "bold" },
       alternateRowStyles: { fillColor: [249, 249, 249] },
       styles: { fontSize: 9, cellPadding: 3 },
-      columnStyles: {
-        0: { cellWidth: 20 }, 1: { cellWidth: 55 }, 2: { cellWidth: 18 },
-        3: { cellWidth: 23, halign: "right" }, 4: { cellWidth: 23, halign: "right" },
-        5: { cellWidth: 23, halign: "right" }, 6: { cellWidth: 28, halign: "right" },
-      },
+      columnStyles: { 0: { cellWidth: 20 }, 1: { cellWidth: 55 }, 2: { cellWidth: 18 }, 3: { cellWidth: 23, halign: "right" }, 4: { cellWidth: 23, halign: "right" }, 5: { cellWidth: 23, halign: "right" }, 6: { cellWidth: 28, halign: "right" } },
     });
     const pageHeight = doc.internal.pageSize.height;
     doc.setFontSize(9); doc.setTextColor(150, 150, 150);
@@ -364,61 +400,33 @@ function App() {
     return lignesMouvements;
   };
 
-  // 🖨️ IMPRESSION PDF FICHE MOUVEMENTS
   const imprimerMouvementsPDF = () => {
     if (!ficheMouvements) return;
     const { produit, totaux } = ficheMouvements;
     const tableauLignes = construireTableauMouvements();
     const doc = new jsPDF({ orientation: "landscape" });
     const couleur = [13, 110, 253];
-
-    // En-tête
-    doc.setFillColor(...couleur);
-    doc.rect(0, 0, 297, 25, "F");
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(16); doc.setFont("helvetica", "bold");
+    doc.setFillColor(...couleur); doc.rect(0, 0, 297, 25, "F");
+    doc.setTextColor(255, 255, 255); doc.setFontSize(16); doc.setFont("helvetica", "bold");
     doc.text("GESTION DE STOCK", 148, 10, { align: "center" });
-    doc.setFontSize(12);
-    doc.text("FICHE DE MOUVEMENTS", 148, 20, { align: "center" });
-
-    // Info produit
-    doc.setTextColor(0, 0, 0);
-    doc.setFontSize(10); doc.setFont("helvetica", "bold");
+    doc.setFontSize(12); doc.text("FICHE DE MOUVEMENTS", 148, 20, { align: "center" });
+    doc.setTextColor(0, 0, 0); doc.setFontSize(10); doc.setFont("helvetica", "bold");
     doc.text(`Code : ${produit.code_produit}`, 15, 35);
     doc.text(`Designation : ${produit.designation}`, 60, 35);
     doc.text(`Unite : ${produit.unite}`, 150, 35);
     doc.text(`Prix Achat : ${produit.prix_achat} MRU`, 185, 35);
     doc.text(`Prix Vente : ${produit.prix_vente} MRU`, 237, 35);
-
     doc.setDrawColor(...couleur); doc.setLineWidth(0.5); doc.line(15, 40, 282, 40);
-
-    // Tableau mouvements
     autoTable(doc, {
       startY: 45,
       head: [["Date", "N° Bon", "Type", "Fournisseur / Client", "Entree", "Sortie", "Stock"]],
-      body: tableauLignes.map((l) => [
-        l.date,
-        l.numero_bon,
-        l.type,
-        l.tiers,
-        l.entree !== "-" ? l.entree : "",
-        l.sortie !== "-" ? l.sortie : "",
-        l.stock,
-      ]),
+      body: tableauLignes.map((l) => [l.date, l.numero_bon, l.type, l.tiers, l.entree !== "-" ? l.entree : "", l.sortie !== "-" ? l.sortie : "", l.stock]),
       foot: [["", "", "", "TOTAUX :", totaux.total_entrees, totaux.total_sorties, totaux.stock_final]],
       headStyles: { fillColor: couleur, textColor: 255, fontStyle: "bold" },
       footStyles: { fillColor: [40, 40, 40], textColor: 255, fontStyle: "bold" },
       alternateRowStyles: { fillColor: [249, 249, 249] },
       styles: { fontSize: 9, cellPadding: 3 },
-      columnStyles: {
-        0: { cellWidth: 25 },
-        1: { cellWidth: 25 },
-        2: { cellWidth: 25 },
-        3: { cellWidth: 90 },
-        4: { cellWidth: 25, halign: "center" },
-        5: { cellWidth: 25, halign: "center" },
-        6: { cellWidth: 25, halign: "center" },
-      },
+      columnStyles: { 0: { cellWidth: 25 }, 1: { cellWidth: 25 }, 2: { cellWidth: 25 }, 3: { cellWidth: 90 }, 4: { cellWidth: 25, halign: "center" }, 5: { cellWidth: 25, halign: "center" }, 6: { cellWidth: 25, halign: "center" } },
       didParseCell: (data) => {
         if (data.section === "body") {
           const type = tableauLignes[data.row.index]?.type;
@@ -428,8 +436,6 @@ function App() {
         }
       },
     });
-
-    // Résumé bas de page
     const finalY = doc.lastAutoTable.finalY + 8;
     doc.setFontSize(10); doc.setFont("helvetica", "bold");
     doc.setFillColor(23, 162, 184); doc.rect(15, finalY, 55, 12, "F");
@@ -441,11 +447,9 @@ function App() {
     doc.text(`Total Entrees: +${totaux.total_entrees}`, 102, finalY + 8, { align: "center" });
     doc.text(`Total Sorties: -${totaux.total_sorties}`, 162, finalY + 8, { align: "center" });
     doc.text(`Stock Final: ${totaux.stock_final}`, 222, finalY + 8, { align: "center" });
-
     const pageHeight = doc.internal.pageSize.height;
     doc.setFontSize(8); doc.setTextColor(150, 150, 150); doc.setFont("helvetica", "normal");
     doc.text(`Document genere le ${new Date().toLocaleDateString("fr-FR")} a ${new Date().toLocaleTimeString("fr-FR")}`, 148, pageHeight - 8, { align: "center" });
-
     doc.save(`Fiche_Mouvements_${produit.code_produit}_${produit.designation}.pdf`);
   };
 
@@ -485,6 +489,69 @@ function App() {
     doc.text(`Document genere le ${new Date().toLocaleDateString("fr-FR")} a ${new Date().toLocaleTimeString("fr-FR")}`, 105, pageHeight - 10, { align: "center" });
     doc.save(`${titre.replace(" ", "_")}_${bonDetail.numero_bon}.pdf`);
   };
+
+  // PAGE STOCK INITIAL
+  const renderStockInitial = () => (
+    <div>
+      <h4 className="mb-4">📦 Saisie du Stock Initial</h4>
+      <div className="alert alert-info">
+        <strong>ℹ️ Information :</strong> Le stock initial représente la quantité de départ de chaque produit avant tout mouvement. Il est utilisé dans la Fiche de Mouvements et la Fiche de Stock.
+      </div>
+      {message && (<div className={`alert ${message.includes("succes") ? "alert-success" : "alert-danger"} alert-dismissible`}>{message}<button className="btn-close" onClick={() => setMessage("")}></button></div>)}
+      {loadingStockInitial ? (
+        <div className="text-center my-4"><div className="spinner-border text-primary"></div><p className="mt-2">Chargement...</p></div>
+      ) : (
+        <div className="card p-0">
+          <table className="table table-bordered table-hover mb-0">
+            <thead className="table-dark">
+              <tr>
+                <th>Code</th>
+                <th>Designation</th>
+                <th>Unite</th>
+                <th className="text-center">Quantite Initiale</th>
+                <th className="text-center">Prix Unitaire (MRU)</th>
+                <th className="text-center">Date Saisie (jj/mm/aaaa)</th>
+                <th className="text-center">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {stockInitialData.map((p) => (
+                <tr key={p.id_produit} className={Number(stockInitialEdite[p.id_produit]?.quantite) > 0 ? "table-success" : ""}>
+                  <td><strong>{p.code_produit}</strong></td>
+                  <td>{p.designation}</td>
+                  <td>{p.unite}</td>
+                  <td className="text-center">
+                    <input type="number" className="form-control form-control-sm text-center" min="0"
+                      style={{ width: "100px", margin: "auto" }}
+                      value={stockInitialEdite[p.id_produit]?.quantite || 0}
+                      onChange={(e) => setStockInitialEdite({ ...stockInitialEdite, [p.id_produit]: { ...stockInitialEdite[p.id_produit], quantite: e.target.value } })} />
+                  </td>
+                  <td className="text-center">
+                    <input type="number" className="form-control form-control-sm text-center" min="0"
+                      style={{ width: "120px", margin: "auto" }}
+                      value={stockInitialEdite[p.id_produit]?.prix_unitaire || 0}
+                      onChange={(e) => setStockInitialEdite({ ...stockInitialEdite, [p.id_produit]: { ...stockInitialEdite[p.id_produit], prix_unitaire: e.target.value } })} />
+                  </td>
+                  <td className="text-center">
+                    <input type="text" placeholder="jj/mm/aaaa" maxLength={10}
+                      className={`form-control form-control-sm text-center ${stockInitialSaisieDates[p.id_produit] && !dateValide(stockInitialSaisieDates[p.id_produit]) ? "is-invalid" : stockInitialSaisieDates[p.id_produit] && dateValide(stockInitialSaisieDates[p.id_produit]) ? "is-valid" : ""}`}
+                      style={{ width: "130px", margin: "auto" }}
+                      value={stockInitialSaisieDates[p.id_produit] || ""}
+                      onChange={(e) => setStockInitialSaisieDates({ ...stockInitialSaisieDates, [p.id_produit]: e.target.value })} />
+                  </td>
+                  <td className="text-center">
+                    <button className="btn btn-success btn-sm" onClick={() => enregistrerStockInitial(p.id_produit)}>
+                      💾 Enregistrer
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
 
   const renderFicheStock = () => (
     <div>
@@ -592,7 +659,6 @@ function App() {
         const { produit, totaux } = ficheMouvements;
         return (
           <div className="card p-4">
-            {/* Bouton imprimer PDF */}
             <div className="d-flex justify-content-between align-items-center mb-3">
               <div className="row p-3 bg-primary text-white rounded w-100 me-3">
                 <div className="col-md-3"><strong>Code :</strong> {produit.code_produit}</div>
@@ -689,7 +755,8 @@ function App() {
     stock: "Stock Actuel", produits: "Produits", clients: "Clients", fournisseurs: "Fournisseurs",
     "bon-entree": "Nouveau Bon d'Entree", "bon-sortie": "Nouveau Bon de Sortie",
     "liste-entree": "Liste des Bons d'Entree", "liste-sortie": "Liste des Bons de Sortie",
-    "graphiques": "Graphiques", "mouvements": "Fiche Mouvements", "fiche-stock": "Fiche de Stock",
+    "graphiques": "Graphiques", "mouvements": "Fiche Mouvements",
+    "fiche-stock": "Fiche de Stock", "stock-initial": "Stock Initial",
   };
 
   const donneesFiltrees = donnees.filter((d) => Object.values(d).some((v) => String(v).toLowerCase().includes(recherche.toLowerCase())));
@@ -898,7 +965,7 @@ function App() {
           {Object.keys(titres).map((p) => (
             <button key={p} onClick={() => { setPage(p); resetBon(); setBonDetail(null); setShowEditBon(false); setFicheMouvements(null); setProduitSelectionne(""); setFicheStockData(null); }}
               className={`btn me-2 mb-2 ${page === p ? "btn-primary" : "btn-secondary"}`}>
-              {p === "graphiques" ? "📊 " : p === "mouvements" ? "📋 " : p === "fiche-stock" ? "📊 " : ""}{titres[p]}
+              {p === "graphiques" ? "📊 " : p === "mouvements" ? "📋 " : p === "fiche-stock" ? "📊 " : p === "stock-initial" ? "📦 " : ""}{titres[p]}
             </button>
           ))}
         </div>
@@ -906,6 +973,7 @@ function App() {
         {page === "graphiques" ? renderGraphiques()
           : page === "mouvements" ? renderMouvements()
           : page === "fiche-stock" ? renderFicheStock()
+          : page === "stock-initial" ? renderStockInitial()
           : page === "bon-entree" ? renderFormulaireBon("bon-entree")
           : page === "bon-sortie" ? renderFormulaireBon("bon-sortie")
           : page === "liste-entree" ? renderListeBons("entree")
