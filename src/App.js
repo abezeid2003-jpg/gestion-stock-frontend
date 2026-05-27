@@ -847,6 +847,8 @@ function App() {
   const imprimerSituationFinancierePDF = () => {
     if (!sfSituationData) return;
     const { client, date_inventaire, lignes, totaux } = sfSituationData; // eslint-disable-line no-unused-vars
+    // Fonction formatage compatible jsPDF (pas de caractères spéciaux)
+    const fmt = (val) => Number(val).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
     const doc = new jsPDF({ orientation: "landscape" });
     const couleur = [13, 110, 253];
     doc.setFillColor(...couleur); doc.rect(0, 0, 297, 25, "F");
@@ -856,38 +858,39 @@ function App() {
     doc.setTextColor(0, 0, 0); doc.setFontSize(10); doc.setFont("helvetica", "bold");
     doc.text(`Client : ${client.nom} (${client.code_client})`, 15, 35);
     doc.text(`Date Inventaire : ${formatDateFR(date_inventaire)}`, 150, 35);
-    doc.text(`Solde Initial : ${Number(totaux.solde_initial).toLocaleString("fr-FR")} MRU`, 15, 42);
-    doc.text(`Total Versements : ${Number(totaux.total_versements).toLocaleString("fr-FR")} MRU`, 150, 42);
+    doc.text(`Solde Initial : ${fmt(totaux.solde_initial)} MRU`, 15, 42);
+    doc.text(`Total Versements : ${fmt(totaux.total_versements)} MRU`, 150, 42);
     doc.setDrawColor(...couleur); doc.setLineWidth(0.5); doc.line(15, 47, 282, 47);
     autoTable(doc, {
       startY: 52,
       head: [["Code", "Designation", "Unite", "S.I Client", "Sorties", "S.MAD", "S.INV", "S.PERIMES", "S.V", "Prix Vente", "Valeur S.V"]],
       body: lignes.map((l) => [
         l.code_produit, l.designation, l.unite,
-        Number(l.stock_initial_client).toFixed(2),
-        Number(l.total_sorties_client).toFixed(2),
-        Number(l.s_mad).toFixed(2),
-        Number(l.s_inv).toFixed(2),
-        Number(l.s_perimes).toFixed(2),
-        Number(l.s_v).toFixed(2),
-        Number(l.prix_vente).toFixed(2),
-        Number(l.valeur_sv).toLocaleString("fr-FR", { minimumFractionDigits: 2 })
+        fmt(l.stock_initial_client),
+        fmt(l.total_sorties_client),
+        fmt(l.s_mad),
+        fmt(l.s_inv),
+        fmt(l.s_perimes),
+        fmt(l.s_v),
+        fmt(l.prix_vente),
+        fmt(l.valeur_sv)
       ]),
-      foot: [["", "", "", "", "", "", "", "", "", "TOTAL S.V :", Number(totaux.total_valeur_sv).toLocaleString("fr-FR", { minimumFractionDigits: 2 }) + " MRU"]],
+      foot: [["", "", "", "", "", "", "", "", "", "TOTAL S.V :", fmt(totaux.total_valeur_sv) + " MRU"]],
       headStyles: { fillColor: couleur, textColor: 255, fontStyle: "bold", fontSize: 8 },
       footStyles: { fillColor: [40, 40, 40], textColor: 255, fontStyle: "bold" },
       alternateRowStyles: { fillColor: [249, 249, 249] },
       styles: { fontSize: 8, cellPadding: 2 },
+      columnStyles: { 3: { halign: "right" }, 4: { halign: "right" }, 5: { halign: "right" }, 6: { halign: "right" }, 7: { halign: "right" }, 8: { halign: "right" }, 9: { halign: "right" }, 10: { halign: "right" } }
     });
     const finalY = doc.lastAutoTable.finalY + 8;
-    doc.setFontSize(11); doc.setFont("helvetica", "bold");
+    doc.setFontSize(10); doc.setFont("helvetica", "bold");
     doc.setFillColor(220, 53, 69); doc.rect(15, finalY, 80, 12, "F");
     doc.setFillColor(25, 135, 84); doc.rect(100, finalY, 80, 12, "F");
     doc.setFillColor(13, 110, 253); doc.rect(185, finalY, 95, 12, "F");
     doc.setTextColor(255, 255, 255);
-    doc.text(`Solde Initial : ${Number(totaux.solde_initial).toLocaleString("fr-FR")} MRU`, 55, finalY + 8, { align: "center" });
-    doc.text(`Total S.V : ${Number(totaux.total_valeur_sv).toLocaleString("fr-FR")} MRU`, 140, finalY + 8, { align: "center" });
-    doc.text(`TOTAL CREANCE : ${Number(totaux.total_creance).toLocaleString("fr-FR")} MRU`, 232, finalY + 8, { align: "center" });
+    doc.text(`Solde Initial : ${fmt(totaux.solde_initial)} MRU`, 55, finalY + 8, { align: "center" });
+    doc.text(`Total S.V : ${fmt(totaux.total_valeur_sv)} MRU`, 140, finalY + 8, { align: "center" });
+    doc.text(`TOTAL CREANCE : ${fmt(totaux.total_creance)} MRU`, 232, finalY + 8, { align: "center" });
     const pageHeight = doc.internal.pageSize.height;
     doc.setFontSize(8); doc.setTextColor(150, 150, 150); doc.setFont("helvetica", "normal");
     doc.text(`Document genere le ${new Date().toLocaleDateString("fr-FR")} a ${new Date().toLocaleTimeString("fr-FR")}`, 148, pageHeight - 8, { align: "center" });
