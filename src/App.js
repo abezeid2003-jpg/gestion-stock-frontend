@@ -761,13 +761,17 @@ function App() {
   };
 
   const chargerSituationFinanciere = async () => {
-    if (!sfClientSelectionne || !sfDateInventaire || !dateValide(sfDateInventaire)) { setMessage("Choisissez un client et une date valide !"); return; }
+    if (!sfClientSelectionne) { setMessage("Choisissez un client !"); return; }
+    if (!sfDateInventaire || !dateValide(sfDateInventaire)) { setMessage("Date d'inventaire invalide !"); return; }
     setSfLoading(true); setSfSituationData(null);
     try {
       const dateISO = parseFR(sfDateInventaire);
-      const data = await fetch(`${API}/situation-financiere/${sfClientSelectionne}?date_inventaire=${dateISO}`, { headers: headers() }).then((r) => r.json());
+      const response = await fetch(`${API}/situation-financiere/${sfClientSelectionne}?date_inventaire=${dateISO}`, { headers: headers() });
+      const data = await response.json();
+      if (data.error) { setMessage("Erreur : " + data.error); setSfLoading(false); return; }
       setSfSituationData(data);
-    } catch (err) { setMessage("Erreur de chargement !"); }
+      if (data.versements) setVersementsData(data.versements);
+    } catch (err) { setMessage("Erreur de chargement : " + err.message); }
     setSfLoading(false);
   };
 
@@ -823,16 +827,21 @@ function App() {
 
   const enregistrerInventaireEtPerimes = async () => {
     if (!sfSaisieDate || !dateValide(sfSaisieDate)) { setMessage("Date d'inventaire invalide !"); return; }
+    if (!sfClientSelectionne) { setMessage("Choisissez un client !"); return; }
     const dateISO = parseFR(sfSaisieDate);
     try {
-      for (const id_produit of Object.keys(sfInventaireEdite)) {
-        await fetch(`${API}/inventaire`, { method: "POST", headers: headers(), body: JSON.stringify({ id_client: sfClientSelectionne, id_produit, date_inventaire: dateISO, qte_inventaire: sfInventaireEdite[id_produit] || 0 }) });
-        await fetch(`${API}/perimes`, { method: "POST", headers: headers(), body: JSON.stringify({ id_client: sfClientSelectionne, id_produit, date_inventaire: dateISO, qte_perimee: sfPerimesEdite[id_produit] || 0 }) });
+      const produitIds = Object.keys(sfInventaireEdite);
+      for (const id_produit of produitIds) {
+        const qte_inv = sfInventaireEdite[id_produit] !== "" ? sfInventaireEdite[id_produit] : 0;
+        const qte_per = sfPerimesEdite[id_produit] !== "" ? sfPerimesEdite[id_produit] : 0;
+        await fetch(`${API}/inventaire`, { method: "POST", headers: headers(), body: JSON.stringify({ id_client: sfClientSelectionne, id_produit: Number(id_produit), date_inventaire: dateISO, qte_inventaire: qte_inv }) });
+        await fetch(`${API}/perimes`, { method: "POST", headers: headers(), body: JSON.stringify({ id_client: sfClientSelectionne, id_produit: Number(id_produit), date_inventaire: dateISO, qte_perimee: qte_per }) });
       }
       setMessage("Inventaire et perimés enregistres avec succes !");
       setSfDateInventaire(sfSaisieDate);
+      setSfSituationData(null);
       setSfEtape(3);
-    } catch (err) { setMessage("Erreur de connexion !"); }
+    } catch (err) { setMessage("Erreur de connexion : " + err.message); }
   };
 
   const imprimerSituationFinancierePDF = () => {
