@@ -99,6 +99,109 @@ function App() {
   const [newVersementDate, setNewVersementDate] = useState("");
   const [showFormVersement, setShowFormVersement] = useState(false);
 
+  // ETATS VERSEMENTS PAGE PRINCIPALE
+  const [versementsListe, setVersementsListe] = useState([]);
+  const [versementsDateDebut, setVersementsDateDebut] = useState("");
+  const [versementsDateFin, setVersementsDateFin] = useState("");
+  const [versementsLoading, setVersementsLoading] = useState(false);
+  const [showFormNouveauVersement, setShowFormNouveauVersement] = useState(false);
+  const [nouveauVersement, setNouveauVersement] = useState({ id_client: "", date_versement: "", montant: "", mode_paiement: "", reference: "", observation: "" });
+  const [nouveauVersementDate, setNouveauVersementDate] = useState("");
+
+  const chargerVersementsListe = async () => {
+    if (!versementsDateDebut || !dateValide(versementsDateDebut)) { setMessage("Date début invalide !"); return; }
+    if (!versementsDateFin || !dateValide(versementsDateFin)) { setMessage("Date fin invalide !"); return; }
+    setVersementsLoading(true);
+    try {
+      const data = await fetch(`${API}/versements`, { headers: headers() }).then((r) => r.json());
+      const dateDebut = parseFR(versementsDateDebut);
+      const dateFin = parseFR(versementsDateFin);
+      const filtres = data.filter((v) => { const d = v.date_versement?.substring(0, 10); return d >= dateDebut && d <= dateFin; });
+      setVersementsListe(filtres);
+    } catch (err) { setMessage("Erreur de chargement !"); }
+    setVersementsLoading(false);
+  };
+
+  const ajouterNouveauVersement = async () => {
+    if (!nouveauVersement.id_client) { setMessage("Choisissez un client !"); return; }
+    if (!nouveauVersementDate || !dateValide(nouveauVersementDate)) { setMessage("Date versement invalide !"); return; }
+    if (!nouveauVersement.montant || Number(nouveauVersement.montant) <= 0) { setMessage("Montant invalide !"); return; }
+    try {
+      const response = await fetch(`${API}/versements`, { method: "POST", headers: headers(), body: JSON.stringify({ id_client: nouveauVersement.id_client, date_versement: parseFR(nouveauVersementDate), montant: nouveauVersement.montant, mode_paiement: nouveauVersement.mode_paiement, reference: nouveauVersement.reference, observation: nouveauVersement.observation }) });
+      const data = await response.json();
+      if (data.success) { setMessage("Versement enregistre avec succes !"); setNouveauVersement({ id_client: "", date_versement: "", montant: "", mode_paiement: "", reference: "", observation: "" }); setNouveauVersementDate(""); setShowFormNouveauVersement(false); chargerVersementsListe(); }
+      else { setMessage("Erreur : " + data.error); }
+    } catch (err) { setMessage("Erreur de connexion !"); }
+  };
+
+  const supprimerVersementListe = async (id) => {
+    if (!window.confirm("Confirmer la suppression ?")) return;
+    try {
+      const response = await fetch(`${API}/versements/${id}`, { method: "DELETE", headers: headers() });
+      const data = await response.json();
+      if (data.success) { setMessage("Versement supprime !"); chargerVersementsListe(); }
+      else { setMessage("Erreur : " + data.error); }
+    } catch (err) { setMessage("Erreur de connexion !"); }
+  };
+
+  const renderVersements = () => (
+    <div>
+      <h4 className="mb-4">💳 Versements Clients</h4>
+      {message && (<div className={`alert ${message.includes("succes") ? "alert-success" : "alert-danger"} alert-dismissible`}>{message}<button className="btn-close" onClick={() => setMessage("")}></button></div>)}
+      <div className="d-flex justify-content-between align-items-center mb-3">
+        <button className="btn btn-success" onClick={() => setShowFormNouveauVersement(!showFormNouveauVersement)}>{showFormNouveauVersement ? "Annuler" : "+ Nouveau Versement"}</button>
+      </div>
+      {showFormNouveauVersement && (
+        <div className="card p-3 mb-3 border-success">
+          <h5 className="mb-3 text-success">Nouveau Versement</h5>
+          <div className="row g-2">
+            <div className="col-md-3"><label className="form-label">Client *</label><select className="form-select" value={nouveauVersement.id_client} onChange={(e) => setNouveauVersement({ ...nouveauVersement, id_client: e.target.value })}><option value="">-- Choisir --</option>{clients.map((c) => (<option key={c.id_client} value={c.id_client}>{c.code_client} — {c.nom}</option>))}</select></div>
+            <div className="col-md-2"><label className="form-label">Date * (jj/mm/aaaa)</label><input type="text" className={`form-control ${nouveauVersementDate && !dateValide(nouveauVersementDate) ? "is-invalid" : nouveauVersementDate && dateValide(nouveauVersementDate) ? "is-valid" : ""}`} placeholder="jj/mm/aaaa" maxLength={10} value={nouveauVersementDate} onChange={(e) => setNouveauVersementDate(e.target.value)} /></div>
+            <div className="col-md-2"><label className="form-label">Montant (MRU) *</label><input type="number" min="0" className="form-control" value={nouveauVersement.montant} onChange={(e) => setNouveauVersement({ ...nouveauVersement, montant: e.target.value })} /></div>
+            <div className="col-md-2"><label className="form-label">Mode Paiement</label><select className="form-select" value={nouveauVersement.mode_paiement} onChange={(e) => setNouveauVersement({ ...nouveauVersement, mode_paiement: e.target.value })}><option value="">-- Choisir --</option><option value="Especes">Espèces</option><option value="Cheque">Chèque</option><option value="Virement">Virement</option><option value="Autre">Autre</option></select></div>
+            <div className="col-md-2"><label className="form-label">Référence</label><input type="text" className="form-control" value={nouveauVersement.reference} onChange={(e) => setNouveauVersement({ ...nouveauVersement, reference: e.target.value })} /></div>
+            <div className="col-md-1 d-flex align-items-end"><button className="btn btn-success w-100" onClick={ajouterNouveauVersement}>💾</button></div>
+          </div>
+          <div className="row g-2 mt-1"><div className="col-md-6"><label className="form-label">Observation</label><input type="text" className="form-control" value={nouveauVersement.observation} onChange={(e) => setNouveauVersement({ ...nouveauVersement, observation: e.target.value })} /></div></div>
+        </div>
+      )}
+      <div className="card p-3 mb-3 border-primary">
+        <div className="row g-3 align-items-end">
+          <div className="col-md-3"><label className="form-label fw-bold">Date Début (jj/mm/aaaa)</label><input type="text" className={`form-control ${versementsDateDebut && !dateValide(versementsDateDebut) ? "is-invalid" : versementsDateDebut && dateValide(versementsDateDebut) ? "is-valid" : ""}`} placeholder="jj/mm/aaaa" maxLength={10} value={versementsDateDebut} onChange={(e) => setVersementsDateDebut(e.target.value)} />{versementsDateDebut && !dateValide(versementsDateDebut) && <div className="invalid-feedback">Date invalide</div>}</div>
+          <div className="col-md-3"><label className="form-label fw-bold">Date Fin (jj/mm/aaaa)</label><input type="text" className={`form-control ${versementsDateFin && !dateValide(versementsDateFin) ? "is-invalid" : versementsDateFin && dateValide(versementsDateFin) ? "is-valid" : ""}`} placeholder="jj/mm/aaaa" maxLength={10} value={versementsDateFin} onChange={(e) => setVersementsDateFin(e.target.value)} />{versementsDateFin && !dateValide(versementsDateFin) && <div className="invalid-feedback">Date invalide</div>}</div>
+          <div className="col-md-3"><button className="btn btn-primary w-100" onClick={chargerVersementsListe}>🔍 Afficher</button></div>
+        </div>
+      </div>
+      {versementsLoading && (<div className="text-center my-4"><div className="spinner-border text-primary"></div></div>)}
+      {versementsListe.length > 0 && !versementsLoading && (
+        <div className="card p-0">
+          <table className="table table-bordered table-hover mb-0">
+            <thead className="table-dark"><tr><th>Date</th><th>Client</th><th>Mode</th><th>Référence</th><th className="text-end">Montant (MRU)</th><th>Observation</th>{isAdmin && <th className="text-center">Action</th>}</tr></thead>
+            <tbody>
+              {versementsListe.map((v) => (
+                <tr key={v.id_versement}>
+                  <td>{formatDateFR(v.date_versement?.substring(0, 10))}</td>
+                  <td><strong>{v.code_client}</strong> — {v.nom_client}</td>
+                  <td>{v.mode_paiement || "-"}</td>
+                  <td>{v.reference || "-"}</td>
+                  <td className="text-end fw-bold text-success">{Number(v.montant).toLocaleString("fr-FR")}</td>
+                  <td>{v.observation || "-"}</td>
+                  {isAdmin && <td className="text-center"><button className="btn btn-danger btn-sm" onClick={() => supprimerVersementListe(v.id_versement)}>🗑️</button></td>}
+                </tr>
+              ))}
+            </tbody>
+            <tfoot className="table-success fw-bold">
+              <tr><td colSpan="4" className="text-end">TOTAL PÉRIODE :</td><td className="text-end text-success">{versementsListe.reduce((sum, v) => sum + Number(v.montant), 0).toLocaleString("fr-FR")} MRU</td><td colSpan={isAdmin ? 2 : 1}></td></tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+      {versementsListe.length === 0 && !versementsLoading && versementsDateDebut && versementsDateFin && (
+        <div className="alert alert-info">Aucun versement trouvé pour cette période.</div>
+      )}
+    </div>
+  );
+
   const chargerStats = () => {
     if (!token) return;
     Promise.all([
@@ -117,7 +220,7 @@ function App() {
 
   useEffect(() => {
     if (!token) return;
-    if (["bon-entree", "bon-sortie", "mouvements", "fiche-stock", "stock-initial", "utilisateurs", "situation-financiere"].includes(page)) return;
+    if (["bon-entree", "bon-sortie", "mouvements", "fiche-stock", "stock-initial", "utilisateurs", "situation-financiere", "versements"].includes(page)) return;
     setLoading(true); setDonnees([]); setRecherche(""); setShowForm(false); setMessage(""); setBonDetail(null); setShowEditBon(false);
     const url = page === "liste-entree" ? `${API}/bons-entree` : page === "liste-sortie" ? `${API}/bons-sortie` : `${API}/${page}`;
     fetch(url, { headers: headers() }).then((res) => res.json()).then((data) => { setDonnees(data); setLoading(false); }).catch(() => setLoading(false));
@@ -1092,7 +1195,7 @@ function App() {
 
   const colonnes = { stock: ["code_produit", "designation", "unite", "stock_initial", "total_entree", "total_sortie", "stock_actuel"], produits: ["code_produit", "designation", "unite", "prix_achat", "prix_vente", "stock_minimum"], clients: ["code_client", "nom", "telephone", "adresse"], fournisseurs: ["code_fournisseur", "nom", "telephone", "adresse"], "liste-entree": ["numero_bon", "date_bon", "nom_fournisseur", "observation"], "liste-sortie": ["numero_bon", "date_bon", "nom_client", "observation"] };
   const idCols = { produits: "id_produit", clients: "id_client", fournisseurs: "id_fournisseur" };
-  const titres = { stock: "Stock Actuel", produits: "Produits", clients: "Clients", fournisseurs: "Fournisseurs", "bon-entree": "Nouveau Bon d'Entree", "bon-sortie": "Nouveau Bon de Sortie", "liste-entree": "Liste des Bons d'Entree", "liste-sortie": "Liste des Bons de Sortie", "graphiques": "Graphiques", "mouvements": "Fiche Mouvements", "fiche-stock": "Fiche de Stock", "stock-initial": "Stock Initial", "situation-financiere": "Situation Financiere Client", ...(isAdmin ? { "utilisateurs": "Utilisateurs" } : {}) };
+  const titres = { stock: "Stock Actuel", produits: "Produits", clients: "Clients", fournisseurs: "Fournisseurs", "bon-entree": "Nouveau Bon d'Entree", "bon-sortie": "Nouveau Bon de Sortie", "liste-entree": "Liste des Bons d'Entree", "liste-sortie": "Liste des Bons de Sortie", "graphiques": "Graphiques", "mouvements": "Fiche Mouvements", "fiche-stock": "Fiche de Stock", "stock-initial": "Stock Initial", "situation-financiere": "Situation Financiere Client", "versements": "Versements Clients", ...(isAdmin ? { "utilisateurs": "Utilisateurs" } : {}) };
   const donneesFiltrees = donnees.filter((d) => Object.values(d).some((v) => String(v).toLowerCase().includes(recherche.toLowerCase())));
 
   const renderFormAjout = () => {
@@ -1237,7 +1340,7 @@ function App() {
           {Object.keys(titres).map((p) => (
             <button key={p} onClick={() => { setPage(p); resetBon(); setBonDetail(null); setShowEditBon(false); setFicheMouvements(null); setProduitSelectionne(""); setFicheStockData(null); setStockInitialEnEdition(null); }}
               className={`btn me-2 mb-2 ${page === p ? "btn-primary" : "btn-secondary"}`}>
-              {p === "graphiques" ? "📊 " : p === "mouvements" ? "📋 " : p === "fiche-stock" ? "📊 " : p === "stock-initial" ? "📦 " : p === "utilisateurs" ? "👥 " : p === "situation-financiere" ? "💰 " : ""}{titres[p]}
+              {p === "graphiques" ? "📊 " : p === "mouvements" ? "📋 " : p === "fiche-stock" ? "📊 " : p === "stock-initial" ? "📦 " : p === "utilisateurs" ? "👥 " : p === "situation-financiere" ? "💰 " : p === "versements" ? "💳 " : ""}{titres[p]}
             </button>
           ))}
         </div>
@@ -1247,6 +1350,7 @@ function App() {
           : page === "fiche-stock" ? renderFicheStock()
           : page === "stock-initial" ? renderStockInitial()
           : page === "situation-financiere" ? renderSituationFinanciere()
+          : page === "versements" ? renderVersements()
           : page === "utilisateurs" && isAdmin ? renderUtilisateurs()
           : page === "bon-entree" ? renderFormulaireBon("bon-entree")
           : page === "bon-sortie" ? renderFormulaireBon("bon-sortie")
