@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import 'bootstrap/dist/css/bootstrap.min.css';
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import logoCAIE from "./logo.png";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from "recharts";
@@ -468,9 +469,10 @@ function App() {
   const imprimerFicheStockPDF = () => {
     if (!ficheStockData) return;
     const doc = new jsPDF(); const couleur = [13, 110, 253];
-    doc.setFillColor(...couleur); doc.rect(0, 0, 210, 30, "F");
-    doc.setTextColor(255, 255, 255); doc.setFontSize(20); doc.setFont("helvetica", "bold");
-    doc.text("GESTION DE STOCK", 105, 13, { align: "center" }); doc.setFontSize(13); doc.text("FICHE DE STOCK", 105, 23, { align: "center" });
+    doc.setFillColor(...couleur); doc.rect(0, 0, 210, 35, "F");
+    doc.addImage(logoCAIE, "JPEG", 95, 3, 20, 20);
+    doc.setTextColor(255, 255, 255); doc.setFontSize(14); doc.setFont("helvetica", "bold");
+    doc.text("GESTION DE STOCK", 105, 27, { align: "center" }); doc.setFontSize(11); doc.text("FICHE DE STOCK", 105, 33, { align: "center" });
     doc.setTextColor(0, 0, 0); doc.setFontSize(11); doc.setFont("helvetica", "bold");
     if (ficheStockData.dateDebut === ficheStockData.dateFin) { doc.text(`Date : ${ficheStockData.dateDebut}`, 15, 42); } else { doc.text(`Periode : du ${ficheStockData.dateDebut} au ${ficheStockData.dateFin}`, 15, 42); }
     doc.setDrawColor(...couleur); doc.setLineWidth(0.5); doc.line(15, 48, 195, 48);
@@ -501,9 +503,10 @@ function App() {
     if (!ficheMouvements) return;
     const { produit, totaux } = ficheMouvements; const tableauLignes = construireTableauMouvements();
     const doc = new jsPDF({ orientation: "landscape" }); const couleur = [13, 110, 253];
-    doc.setFillColor(...couleur); doc.rect(0, 0, 297, 25, "F");
-    doc.setTextColor(255, 255, 255); doc.setFontSize(16); doc.setFont("helvetica", "bold");
-    doc.text("GESTION DE STOCK", 148, 10, { align: "center" }); doc.setFontSize(12); doc.text("FICHE DE MOUVEMENTS", 148, 20, { align: "center" });
+    doc.setFillColor(...couleur); doc.rect(0, 0, 297, 30, "F");
+    doc.addImage(logoCAIE, "JPEG", 138, 3, 20, 20);
+    doc.setTextColor(255, 255, 255); doc.setFontSize(14); doc.setFont("helvetica", "bold");
+    doc.text("GESTION DE STOCK", 148, 15, { align: "center" }); doc.setFontSize(11); doc.text("FICHE DE MOUVEMENTS", 148, 27, { align: "center" });
     doc.setTextColor(0, 0, 0); doc.setFontSize(10); doc.setFont("helvetica", "bold");
     doc.text(`Code : ${produit.code_produit}`, 15, 35); doc.text(`Designation : ${produit.designation}`, 60, 35); doc.text(`Unite : ${produit.unite}`, 150, 35); doc.text(`Prix Achat : ${produit.prix_achat} MRU`, 185, 35); doc.text(`Prix Vente : ${produit.prix_vente} MRU`, 237, 35);
     doc.setDrawColor(...couleur); doc.setLineWidth(0.5); doc.line(15, 40, 282, 40);
@@ -521,9 +524,10 @@ function App() {
 
   const imprimerBonPDF = (type) => {
     const doc = new jsPDF(); const estEntree = type === "entree"; const titre = estEntree ? "BON D'ENTREE" : "BON DE SORTIE"; const couleur = estEntree ? [13, 110, 253] : [25, 135, 84];
-    doc.setFillColor(...couleur); doc.rect(0, 0, 210, 30, "F");
-    doc.setTextColor(255, 255, 255); doc.setFontSize(20); doc.setFont("helvetica", "bold");
-    doc.text("GESTION DE STOCK", 105, 13, { align: "center" }); doc.setFontSize(13); doc.text(titre, 105, 23, { align: "center" });
+    doc.setFillColor(...couleur); doc.rect(0, 0, 210, 35, "F");
+    doc.addImage(logoCAIE, "JPEG", 95, 3, 20, 20);
+    doc.setTextColor(255, 255, 255); doc.setFontSize(14); doc.setFont("helvetica", "bold");
+    doc.text("GESTION DE STOCK", 105, 27, { align: "center" }); doc.setFontSize(11); doc.text(titre, 105, 33, { align: "center" });
     doc.setTextColor(0, 0, 0); doc.setFontSize(11); doc.setFont("helvetica", "bold");
     doc.text("Numero du Bon :", 15, 42); doc.text("Date :", 15, 52); doc.text(estEntree ? "Fournisseur :" : "Client :", 15, 62); doc.text("Observation :", 15, 72);
     doc.setFont("helvetica", "normal");
@@ -851,10 +855,11 @@ function App() {
     const fmt = (val) => Number(val).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
     const doc = new jsPDF({ orientation: "landscape" });
     const couleur = [13, 110, 253];
-    doc.setFillColor(...couleur); doc.rect(0, 0, 297, 25, "F");
-    doc.setTextColor(255, 255, 255); doc.setFontSize(16); doc.setFont("helvetica", "bold");
-    doc.text("GESTION DE STOCK", 148, 10, { align: "center" });
-    doc.setFontSize(12); doc.text("SITUATION FINANCIERE CLIENT", 148, 20, { align: "center" });
+    doc.setFillColor(...couleur); doc.rect(0, 0, 297, 30, "F");
+    doc.addImage(logoCAIE, "JPEG", 138, 3, 20, 20);
+    doc.setTextColor(255, 255, 255); doc.setFontSize(14); doc.setFont("helvetica", "bold");
+    doc.text("GESTION DE STOCK", 148, 15, { align: "center" });
+    doc.setFontSize(11); doc.text("SITUATION FINANCIERE CLIENT", 148, 27, { align: "center" });
     doc.setTextColor(0, 0, 0); doc.setFontSize(10); doc.setFont("helvetica", "bold");
     doc.text(`Client : ${client.nom} (${client.code_client})`, 15, 35);
     doc.text(`Date Inventaire : ${formatDateFR(date_inventaire)}`, 150, 35);
@@ -1299,8 +1304,9 @@ function App() {
 
   return (
     <div>
-      <nav className="navbar navbar-dark bg-primary px-4 mb-4 d-flex justify-content-between">
+      <nav className="navbar navbar-dark bg-primary px-4 mb-4 d-flex justify-content-between align-items-center">
         <span className="navbar-brand fw-bold fs-4">📦 Gestion de Stock</span>
+        <img src="/logo.png" alt="CAIE Logo" style={{ height: "55px", width: "55px", objectFit: "contain", borderRadius: "50%", background: "white", padding: "3px" }} />
         <div className="d-flex align-items-center">
           <span className="text-white me-3">{isAdmin ? "👑" : "👤"} <strong>{utilisateur?.nom}</strong><span className={`badge ms-2 ${isAdmin ? "bg-warning text-dark" : "bg-light text-dark"}`}>{isAdmin ? "Admin" : "Utilisateur"}</span></span>
           <button className="btn btn-outline-light btn-sm" onClick={seDeconnecter}>🚪 Deconnexion</button>
