@@ -98,7 +98,6 @@ function App() {
   const [newVersement, setNewVersement] = useState({ date_versement: "", montant: "", mode_paiement: "", reference: "", observation: "" });
   const [newVersementDate, setNewVersementDate] = useState("");
   const [showFormVersement, setShowFormVersement] = useState(false);
-  const [versementAModifier, setVersementAModifier] = useState(null);
 
   const chargerStats = () => {
     if (!token) return;
@@ -735,7 +734,7 @@ function App() {
 
   const imprimerSituationFinancierePDF = () => {
     if (!sfSituationData) return;
-    const { client, solde_initial, date_inventaire, lignes, totaux } = sfSituationData;
+    const { client, date_inventaire, lignes, totaux } = sfSituationData; // eslint-disable-line no-unused-vars
     const doc = new jsPDF({ orientation: "landscape" });
     const couleur = [13, 110, 253];
     doc.setFillColor(...couleur); doc.rect(0, 0, 297, 25, "F");
