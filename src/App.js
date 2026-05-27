@@ -468,15 +468,17 @@ function App() {
 
   const imprimerFicheStockPDF = () => {
     if (!ficheStockData) return;
+    const fmt = (val) => Number(val).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
     const doc = new jsPDF(); const couleur = [13, 110, 253];
-    doc.setFillColor(...couleur); doc.rect(0, 0, 210, 35, "F");
-    doc.addImage(logoCAIE, "JPEG", 95, 3, 20, 20);
+    doc.setFillColor(...couleur); doc.rect(0, 0, 210, 28, "F");
+    doc.addImage(logoCAIE, "JPEG", 3, 2, 22, 22);
+    doc.addImage(logoCAIE, "JPEG", 185, 2, 22, 22);
     doc.setTextColor(255, 255, 255); doc.setFontSize(14); doc.setFont("helvetica", "bold");
-    doc.text("GESTION DE STOCK", 105, 27, { align: "center" }); doc.setFontSize(11); doc.text("FICHE DE STOCK", 105, 33, { align: "center" });
+    doc.text("GESTION DE STOCK", 105, 12, { align: "center" }); doc.setFontSize(11); doc.text("FICHE DE STOCK", 105, 22, { align: "center" });
     doc.setTextColor(0, 0, 0); doc.setFontSize(11); doc.setFont("helvetica", "bold");
-    if (ficheStockData.dateDebut === ficheStockData.dateFin) { doc.text(`Date : ${ficheStockData.dateDebut}`, 15, 42); } else { doc.text(`Periode : du ${ficheStockData.dateDebut} au ${ficheStockData.dateFin}`, 15, 42); }
-    doc.setDrawColor(...couleur); doc.setLineWidth(0.5); doc.line(15, 48, 195, 48);
-    autoTable(doc, { startY: 53, head: [["Code", "Designation", "Unite", "Stock Initial", "Total Entrees", "Total Sorties", "Stock Disponible"]], body: ficheStockData.lignes.map((l) => [l.code_produit, l.designation, l.unite, Number(l.stock_initial).toFixed(2), Number(l.total_entrees).toFixed(2), Number(l.total_sorties).toFixed(2), Number(l.stock_disponible).toFixed(2)]), headStyles: { fillColor: couleur, textColor: 255, fontStyle: "bold" }, alternateRowStyles: { fillColor: [249, 249, 249] }, styles: { fontSize: 9, cellPadding: 3 }, columnStyles: { 0: { cellWidth: 20 }, 1: { cellWidth: 55 }, 2: { cellWidth: 18 }, 3: { cellWidth: 23, halign: "right" }, 4: { cellWidth: 23, halign: "right" }, 5: { cellWidth: 23, halign: "right" }, 6: { cellWidth: 28, halign: "right" } } });
+    if (ficheStockData.dateDebut === ficheStockData.dateFin) { doc.text(`Date : ${ficheStockData.dateDebut}`, 15, 36); } else { doc.text(`Periode : du ${ficheStockData.dateDebut} au ${ficheStockData.dateFin}`, 15, 36); }
+    doc.setDrawColor(...couleur); doc.setLineWidth(0.5); doc.line(15, 41, 195, 41);
+    autoTable(doc, { startY: 46, head: [["Code", "Designation", "Unite", "Stock Initial", "Total Entrees", "Total Sorties", "Stock Disponible"]], body: ficheStockData.lignes.map((l) => [l.code_produit, l.designation, l.unite, fmt(l.stock_initial), fmt(l.total_entrees), fmt(l.total_sorties), fmt(l.stock_disponible)]), headStyles: { fillColor: couleur, textColor: 255, fontStyle: "bold" }, alternateRowStyles: { fillColor: [249, 249, 249] }, styles: { fontSize: 9, cellPadding: 3 }, columnStyles: { 0: { cellWidth: 20 }, 1: { cellWidth: 55 }, 2: { cellWidth: 18 }, 3: { cellWidth: 23, halign: "right" }, 4: { cellWidth: 23, halign: "right" }, 5: { cellWidth: 23, halign: "right" }, 6: { cellWidth: 28, halign: "right" } } });
     const pageHeight = doc.internal.pageSize.height;
     doc.setFontSize(9); doc.setTextColor(150, 150, 150);
     doc.text(`Document genere le ${new Date().toLocaleDateString("fr-FR")} a ${new Date().toLocaleTimeString("fr-FR")}`, 105, pageHeight - 10, { align: "center" });
@@ -503,10 +505,11 @@ function App() {
     if (!ficheMouvements) return;
     const { produit, totaux } = ficheMouvements; const tableauLignes = construireTableauMouvements();
     const doc = new jsPDF({ orientation: "landscape" }); const couleur = [13, 110, 253];
-    doc.setFillColor(...couleur); doc.rect(0, 0, 297, 30, "F");
-    doc.addImage(logoCAIE, "JPEG", 138, 3, 20, 20);
+    doc.setFillColor(...couleur); doc.rect(0, 0, 297, 28, "F");
+    doc.addImage(logoCAIE, "JPEG", 3, 2, 22, 22);
+    doc.addImage(logoCAIE, "JPEG", 272, 2, 22, 22);
     doc.setTextColor(255, 255, 255); doc.setFontSize(14); doc.setFont("helvetica", "bold");
-    doc.text("GESTION DE STOCK", 148, 15, { align: "center" }); doc.setFontSize(11); doc.text("FICHE DE MOUVEMENTS", 148, 27, { align: "center" });
+    doc.text("GESTION DE STOCK", 148, 12, { align: "center" }); doc.setFontSize(11); doc.text("FICHE DE MOUVEMENTS", 148, 22, { align: "center" });
     doc.setTextColor(0, 0, 0); doc.setFontSize(10); doc.setFont("helvetica", "bold");
     doc.text(`Code : ${produit.code_produit}`, 15, 35); doc.text(`Designation : ${produit.designation}`, 60, 35); doc.text(`Unite : ${produit.unite}`, 150, 35); doc.text(`Prix Achat : ${produit.prix_achat} MRU`, 185, 35); doc.text(`Prix Vente : ${produit.prix_vente} MRU`, 237, 35);
     doc.setDrawColor(...couleur); doc.setLineWidth(0.5); doc.line(15, 40, 282, 40);
@@ -524,19 +527,20 @@ function App() {
 
   const imprimerBonPDF = (type) => {
     const doc = new jsPDF(); const estEntree = type === "entree"; const titre = estEntree ? "BON D'ENTREE" : "BON DE SORTIE"; const couleur = estEntree ? [13, 110, 253] : [25, 135, 84];
-    doc.setFillColor(...couleur); doc.rect(0, 0, 210, 35, "F");
-    doc.addImage(logoCAIE, "JPEG", 95, 3, 20, 20);
+    doc.setFillColor(...couleur); doc.rect(0, 0, 210, 28, "F");
+    doc.addImage(logoCAIE, "JPEG", 3, 2, 22, 22);
+    doc.addImage(logoCAIE, "JPEG", 185, 2, 22, 22);
     doc.setTextColor(255, 255, 255); doc.setFontSize(14); doc.setFont("helvetica", "bold");
-    doc.text("GESTION DE STOCK", 105, 27, { align: "center" }); doc.setFontSize(11); doc.text(titre, 105, 33, { align: "center" });
+    doc.text("GESTION DE STOCK", 105, 12, { align: "center" }); doc.setFontSize(11); doc.text(titre, 105, 22, { align: "center" });
     doc.setTextColor(0, 0, 0); doc.setFontSize(11); doc.setFont("helvetica", "bold");
-    doc.text("Numero du Bon :", 15, 42); doc.text("Date :", 15, 52); doc.text(estEntree ? "Fournisseur :" : "Client :", 15, 62); doc.text("Observation :", 15, 72);
+    doc.text("Numero du Bon :", 15, 36); doc.text("Date :", 15, 44); doc.text(estEntree ? "Fournisseur :" : "Client :", 15, 52); doc.text("Observation :", 15, 60);
     doc.setFont("helvetica", "normal");
-    doc.text(bonDetail.numero_bon || "-", 60, 42); doc.text(formatDateFR(bonDetail.date_bon?.substring(0, 10)) || "-", 60, 52);
-    doc.text(estEntree ? (bonDetail.nom_fournisseur || "-") : (bonDetail.nom_client || "-"), 60, 62); doc.text(bonDetail.observation || "-", 60, 72);
-    doc.setDrawColor(...couleur); doc.setLineWidth(0.5); doc.line(15, 78, 195, 78);
+    doc.text(bonDetail.numero_bon || "-", 60, 36); doc.text(formatDateFR(bonDetail.date_bon?.substring(0, 10)) || "-", 60, 44);
+    doc.text(estEntree ? (bonDetail.nom_fournisseur || "-") : (bonDetail.nom_client || "-"), 60, 52); doc.text(bonDetail.observation || "-", 60, 60);
+    doc.setDrawColor(...couleur); doc.setLineWidth(0.5); doc.line(15, 65, 195, 65);
     const formatMontant = (val) => Number(val).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
     const totalGeneral = lignesDetail.reduce((sum, l) => sum + Number(l.montant || 0), 0);
-    autoTable(doc, { startY: 83, head: [["Code", "Designation", "Quantite", "Prix Unitaire", "Montant (MRU)"]], body: lignesDetail.map((l) => [l.code_produit || "-", l.designation || "-", l.quantite, formatMontant(l.prix_unitaire), formatMontant(l.montant)]), foot: [["", "", "", "TOTAL GENERAL :", formatMontant(totalGeneral) + " MRU"]], headStyles: { fillColor: couleur, textColor: 255, fontStyle: "bold" }, footStyles: { fillColor: [240, 240, 240], textColor: 0, fontStyle: "bold" }, alternateRowStyles: { fillColor: [249, 249, 249] }, styles: { fontSize: 10, cellPadding: 4 }, columnStyles: { 0: { cellWidth: 25 }, 1: { cellWidth: 70 }, 2: { cellWidth: 25, halign: "center" }, 3: { cellWidth: 35, halign: "right" }, 4: { cellWidth: 35, halign: "right" } } });
+    autoTable(doc, { startY: 70, head: [["Code", "Designation", "Quantite", "Prix Unitaire", "Montant (MRU)"]], body: lignesDetail.map((l) => [l.code_produit || "-", l.designation || "-", l.quantite, formatMontant(l.prix_unitaire), formatMontant(l.montant)]), foot: [["", "", "", "TOTAL GENERAL :", formatMontant(totalGeneral) + " MRU"]], headStyles: { fillColor: couleur, textColor: 255, fontStyle: "bold" }, footStyles: { fillColor: [240, 240, 240], textColor: 0, fontStyle: "bold" }, alternateRowStyles: { fillColor: [249, 249, 249] }, styles: { fontSize: 10, cellPadding: 4 }, columnStyles: { 0: { cellWidth: 25 }, 1: { cellWidth: 70 }, 2: { cellWidth: 25, halign: "center" }, 3: { cellWidth: 35, halign: "right" }, 4: { cellWidth: 35, halign: "right" } } });
     const pageHeight = doc.internal.pageSize.height;
     doc.setFontSize(9); doc.setTextColor(150, 150, 150);
     doc.text(`Document genere le ${new Date().toLocaleDateString("fr-FR")} a ${new Date().toLocaleTimeString("fr-FR")}`, 105, pageHeight - 10, { align: "center" });
@@ -855,11 +859,12 @@ function App() {
     const fmt = (val) => Number(val).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
     const doc = new jsPDF({ orientation: "landscape" });
     const couleur = [13, 110, 253];
-    doc.setFillColor(...couleur); doc.rect(0, 0, 297, 30, "F");
-    doc.addImage(logoCAIE, "JPEG", 138, 3, 20, 20);
+    doc.setFillColor(...couleur); doc.rect(0, 0, 297, 28, "F");
+    doc.addImage(logoCAIE, "JPEG", 3, 2, 22, 22);
+    doc.addImage(logoCAIE, "JPEG", 272, 2, 22, 22);
     doc.setTextColor(255, 255, 255); doc.setFontSize(14); doc.setFont("helvetica", "bold");
-    doc.text("GESTION DE STOCK", 148, 15, { align: "center" });
-    doc.setFontSize(11); doc.text("SITUATION FINANCIERE CLIENT", 148, 27, { align: "center" });
+    doc.text("GESTION DE STOCK", 148, 12, { align: "center" });
+    doc.setFontSize(11); doc.text("SITUATION FINANCIERE CLIENT", 148, 22, { align: "center" });
     doc.setTextColor(0, 0, 0); doc.setFontSize(10); doc.setFont("helvetica", "bold");
     doc.text(`Client : ${client.nom} (${client.code_client})`, 15, 35);
     doc.text(`Date Inventaire : ${formatDateFR(date_inventaire)}`, 150, 35);
