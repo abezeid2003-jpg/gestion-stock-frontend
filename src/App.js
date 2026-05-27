@@ -746,7 +746,6 @@ function App() {
     doc.text(`Client : ${client.nom} (${client.code_client})`, 15, 35);
     doc.text(`Date Inventaire : ${formatDateFR(date_inventaire)}`, 150, 35);
     doc.text(`Solde Initial : ${Number(totaux.solde_initial).toLocaleString("fr-FR")} MRU`, 15, 42);
-    const total_versements = versements.rows ? versements.rows.reduce((sum, v) => sum + Number(v.montant), 0) : 0;
     doc.text(`Total Versements : ${Number(totaux.total_versements).toLocaleString("fr-FR")} MRU`, 150, 42);
     doc.setDrawColor(...couleur); doc.setLineWidth(0.5); doc.line(15, 47, 282, 47);
     autoTable(doc, {
