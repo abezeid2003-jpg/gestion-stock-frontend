@@ -79,6 +79,20 @@ function App() {
   const [showFormUtilisateur, setShowFormUtilisateur] = useState(false);
   const [utilisateurAModifier, setUtilisateurAModifier] = useState(null);
 
+  // ETATS SITUATION FINANCIERE CLIENT
+  const [sfClientSelectionne, setSfClientSelectionne] = useState("");
+  const [sfDateInventaire, setSfDateInventaire] = useState("");
+  const [sfSoldeInitial, setSfSoldeInitial] = useState({ montant: 0, date_debut: "", observation: "" });
+  const [sfSoldeInitialId, setSfSoldeInitialId] = useState(null);
+  const [sfStockInitialClient, setSfStockInitialClient] = useState([]);
+  const [sfStockInitialEdite, setSfStockInitialEdite] = useState({});
+  const [sfInventaireEdite, setSfInventaireEdite] = useState({});
+  const [sfPerimesEdite, setSfPerimesEdite] = useState({});
+  const [sfSituationData, setSfSituationData] = useState(null);
+  const [sfLoading, setSfLoading] = useState(false);
+  const [sfEtape, setSfEtape] = useState(1);
+  const [sfSaisieDate, setSfSaisieDate] = useState("");
+
   const chargerStats = () => {
     if (!token) return;
     Promise.all([
@@ -97,7 +111,7 @@ function App() {
 
   useEffect(() => {
     if (!token) return;
-    if (["bon-entree", "bon-sortie", "mouvements", "fiche-stock", "stock-initial", "utilisateurs"].includes(page)) return;
+    if (["bon-entree", "bon-sortie", "mouvements", "fiche-stock", "stock-initial", "utilisateurs", "situation-financiere"].includes(page)) return;
     setLoading(true); setDonnees([]); setRecherche(""); setShowForm(false); setMessage(""); setBonDetail(null); setShowEditBon(false);
     const url = page === "liste-entree" ? `${API}/bons-entree` : page === "liste-sortie" ? `${API}/bons-sortie` : `${API}/${page}`;
     fetch(url, { headers: headers() }).then((res) => res.json()).then((data) => { setDonnees(data); setLoading(false); }).catch(() => setLoading(false));
@@ -601,9 +615,357 @@ function App() {
     </div>
   );
 
+  const chargerSituationFinanciere = async () => {
+    if (!sfClientSelectionne || !sfDateInventaire || !dateValide(sfDateInventaire)) { setMessage("Choisissez un client et une date valide !"); return; }
+    setSfLoading(true); setSfSituationData(null);
+    try {
+      const dateISO = parseFR(sfDateInventaire);
+      const data = await fetch(`${API}/situation-financiere/${sfClientSelectionne}?date_inventaire=${dateISO}`, { headers: headers() }).then((r) => r.json());
+      setSfSituationData(data);
+    } catch (err) { setMessage("Erreur de chargement !"); }
+    setSfLoading(false);
+  };
+
+  const chargerStockInitialClient = async () => {
+    if (!sfClientSelectionne) return;
+    setSfLoading(true);
+    try {
+      const [stockData, soldeData] = await Promise.all([
+        fetch(`${API}/stock-initial-client/${sfClientSelectionne}`, { headers: headers() }).then((r) => r.json()),
+        fetch(`${API}/solde-initial-client/${sfClientSelectionne}`, { headers: headers() }).then((r) => r.json()),
+      ]);
+      setSfStockInitialClient(stockData);
+      const edits = {}, invEdits = {}, perEdits = {};
+      stockData.forEach((p) => {
+        edits[p.id_produit] = p.quantite || 0;
+        invEdits[p.id_produit] = 0;
+        perEdits[p.id_produit] = 0;
+      });
+      setSfStockInitialEdite(edits);
+      setSfInventaireEdite(invEdits);
+      setSfPerimesEdite(perEdits);
+      if (soldeData) {
+        setSfSoldeInitialId(soldeData.id_solde);
+        setSfSoldeInitial({ montant: soldeData.montant || 0, date_debut: soldeData.date_debut ? formatDateFR(soldeData.date_debut.substring(0, 10)) : "", observation: soldeData.observation || "" });
+      } else {
+        setSfSoldeInitialId(null);
+        setSfSoldeInitial({ montant: 0, date_debut: "", observation: "" });
+      }
+    } catch (err) { setMessage("Erreur de chargement !"); }
+    setSfLoading(false);
+  };
+
+  const enregistrerSoldeInitial = async () => {
+    try {
+      const date_debut = sfSoldeInitial.date_debut && dateValide(sfSoldeInitial.date_debut) ? parseFR(sfSoldeInitial.date_debut) : null;
+      if (sfSoldeInitialId) {
+        await fetch(`${API}/solde-initial-client/${sfSoldeInitialId}`, { method: "PUT", headers: headers(), body: JSON.stringify({ montant: sfSoldeInitial.montant || 0, date_debut, observation: sfSoldeInitial.observation }) });
+      } else {
+        await fetch(`${API}/solde-initial-client`, { method: "POST", headers: headers(), body: JSON.stringify({ id_client: sfClientSelectionne, montant: sfSoldeInitial.montant || 0, date_debut, observation: sfSoldeInitial.observation }) });
+      }
+      setMessage("Solde initial enregistre avec succes !");
+      chargerStockInitialClient();
+    } catch (err) { setMessage("Erreur de connexion !"); }
+  };
+
+  const enregistrerStockInitialClient = async (id_produit) => {
+    try {
+      await fetch(`${API}/stock-initial-client`, { method: "POST", headers: headers(), body: JSON.stringify({ id_client: sfClientSelectionne, id_produit, quantite: sfStockInitialEdite[id_produit] || 0 }) });
+      setMessage("Stock initial client enregistre !");
+    } catch (err) { setMessage("Erreur de connexion !"); }
+  };
+
+  const enregistrerInventaireEtPerimes = async () => {
+    if (!sfSaisieDate || !dateValide(sfSaisieDate)) { setMessage("Date d'inventaire invalide !"); return; }
+    const dateISO = parseFR(sfSaisieDate);
+    try {
+      for (const id_produit of Object.keys(sfInventaireEdite)) {
+        await fetch(`${API}/inventaire`, { method: "POST", headers: headers(), body: JSON.stringify({ id_client: sfClientSelectionne, id_produit, date_inventaire: dateISO, qte_inventaire: sfInventaireEdite[id_produit] || 0 }) });
+        await fetch(`${API}/perimes`, { method: "POST", headers: headers(), body: JSON.stringify({ id_client: sfClientSelectionne, id_produit, date_inventaire: dateISO, qte_perimee: sfPerimesEdite[id_produit] || 0 }) });
+      }
+      setMessage("Inventaire et perimés enregistres avec succes !");
+      setSfDateInventaire(sfSaisieDate);
+      setSfEtape(3);
+    } catch (err) { setMessage("Erreur de connexion !"); }
+  };
+
+  const imprimerSituationFinancierePDF = () => {
+    if (!sfSituationData) return;
+    const { client, solde_initial, date_inventaire, lignes, totaux } = sfSituationData;
+    const doc = new jsPDF({ orientation: "landscape" });
+    const couleur = [13, 110, 253];
+    doc.setFillColor(...couleur); doc.rect(0, 0, 297, 25, "F");
+    doc.setTextColor(255, 255, 255); doc.setFontSize(16); doc.setFont("helvetica", "bold");
+    doc.text("GESTION DE STOCK", 148, 10, { align: "center" });
+    doc.setFontSize(12); doc.text("SITUATION FINANCIERE CLIENT", 148, 20, { align: "center" });
+    doc.setTextColor(0, 0, 0); doc.setFontSize(10); doc.setFont("helvetica", "bold");
+    doc.text(`Client : ${client.nom} (${client.code_client})`, 15, 35);
+    doc.text(`Date Inventaire : ${formatDateFR(date_inventaire)}`, 150, 35);
+    doc.text(`Solde Initial : ${Number(totaux.solde_initial).toLocaleString("fr-FR")} MRU`, 15, 42);
+    doc.setDrawColor(...couleur); doc.setLineWidth(0.5); doc.line(15, 47, 282, 47);
+    autoTable(doc, {
+      startY: 52,
+      head: [["Code", "Designation", "Unite", "S.I Client", "Sorties", "S.MAD", "S.INV", "S.PERIMES", "S.V", "Prix Vente", "Valeur S.V"]],
+      body: lignes.map((l) => [
+        l.code_produit, l.designation, l.unite,
+        Number(l.stock_initial_client).toFixed(2),
+        Number(l.total_sorties_client).toFixed(2),
+        Number(l.s_mad).toFixed(2),
+        Number(l.s_inv).toFixed(2),
+        Number(l.s_perimes).toFixed(2),
+        Number(l.s_v).toFixed(2),
+        Number(l.prix_vente).toFixed(2),
+        Number(l.valeur_sv).toLocaleString("fr-FR", { minimumFractionDigits: 2 })
+      ]),
+      foot: [["", "", "", "", "", "", "", "", "", "TOTAL S.V :", Number(totaux.total_valeur_sv).toLocaleString("fr-FR", { minimumFractionDigits: 2 }) + " MRU"]],
+      headStyles: { fillColor: couleur, textColor: 255, fontStyle: "bold", fontSize: 8 },
+      footStyles: { fillColor: [40, 40, 40], textColor: 255, fontStyle: "bold" },
+      alternateRowStyles: { fillColor: [249, 249, 249] },
+      styles: { fontSize: 8, cellPadding: 2 },
+    });
+    const finalY = doc.lastAutoTable.finalY + 8;
+    doc.setFontSize(11); doc.setFont("helvetica", "bold");
+    doc.setFillColor(220, 53, 69); doc.rect(15, finalY, 80, 12, "F");
+    doc.setFillColor(25, 135, 84); doc.rect(100, finalY, 80, 12, "F");
+    doc.setFillColor(13, 110, 253); doc.rect(185, finalY, 95, 12, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.text(`Solde Initial : ${Number(totaux.solde_initial).toLocaleString("fr-FR")} MRU`, 55, finalY + 8, { align: "center" });
+    doc.text(`Total S.V : ${Number(totaux.total_valeur_sv).toLocaleString("fr-FR")} MRU`, 140, finalY + 8, { align: "center" });
+    doc.text(`TOTAL CREANCE : ${Number(totaux.total_creance).toLocaleString("fr-FR")} MRU`, 232, finalY + 8, { align: "center" });
+    const pageHeight = doc.internal.pageSize.height;
+    doc.setFontSize(8); doc.setTextColor(150, 150, 150); doc.setFont("helvetica", "normal");
+    doc.text(`Document genere le ${new Date().toLocaleDateString("fr-FR")} a ${new Date().toLocaleTimeString("fr-FR")}`, 148, pageHeight - 8, { align: "center" });
+    doc.save(`Situation_Financiere_${client.code_client}_${date_inventaire}.pdf`);
+  };
+
+  const renderSituationFinanciere = () => (
+    <div>
+      <h4 className="mb-4">💰 Situation Financière Client</h4>
+      {message && (<div className={`alert ${message.includes("succes") ? "alert-success" : "alert-danger"} alert-dismissible`}>{message}<button className="btn-close" onClick={() => setMessage("")}></button></div>)}
+
+      {/* ETAPE 1 — Sélection client et saisie données */}
+      <div className="card p-3 mb-3">
+        <div className="row g-3 align-items-end">
+          <div className="col-md-4">
+            <label className="form-label fw-bold">Client</label>
+            <select className="form-select" value={sfClientSelectionne} onChange={(e) => { setSfClientSelectionne(e.target.value); setSfSituationData(null); setSfEtape(1); }}>
+              <option value="">-- Choisir un client --</option>
+              {clients.map((c) => (<option key={c.id_client} value={c.id_client}>{c.code_client} — {c.nom}</option>))}
+            </select>
+          </div>
+          <div className="col-md-3">
+            <button className="btn btn-primary w-100" onClick={chargerStockInitialClient} disabled={!sfClientSelectionne}>📂 Charger les données</button>
+          </div>
+        </div>
+      </div>
+
+      {sfClientSelectionne && sfStockInitialClient.length > 0 && (
+        <>
+          {/* ONGLETS ETAPES */}
+          <ul className="nav nav-tabs mb-3">
+            <li className="nav-item"><button className={`nav-link ${sfEtape === 1 ? "active" : ""}`} onClick={() => setSfEtape(1)}>1️⃣ Solde & Stock Initial</button></li>
+            <li className="nav-item"><button className={`nav-link ${sfEtape === 2 ? "active" : ""}`} onClick={() => setSfEtape(2)}>2️⃣ Inventaire & Périmés</button></li>
+            <li className="nav-item"><button className={`nav-link ${sfEtape === 3 ? "active" : ""}`} onClick={() => setSfEtape(3)}>3️⃣ Situation Financière</button></li>
+          </ul>
+
+          {/* ETAPE 1 — Solde initial + Stock initial client */}
+          {sfEtape === 1 && (
+            <div>
+              <div className="card p-3 mb-3 border-primary">
+                <h5 className="text-primary mb-3">💰 Solde Initial (Créance début de période)</h5>
+                <div className="row g-3">
+                  <div className="col-md-3">
+                    <label className="form-label">Montant (MRU)</label>
+                    <input type="number" min="0" className="form-control" value={sfSoldeInitial.montant} onChange={(e) => setSfSoldeInitial({ ...sfSoldeInitial, montant: e.target.value })} />
+                  </div>
+                  <div className="col-md-3">
+                    <label className="form-label">Date début (jj/mm/aaaa)</label>
+                    <input type="text" className={`form-control ${sfSoldeInitial.date_debut && !dateValide(sfSoldeInitial.date_debut) ? "is-invalid" : sfSoldeInitial.date_debut && dateValide(sfSoldeInitial.date_debut) ? "is-valid" : ""}`} placeholder="jj/mm/aaaa" maxLength={10} value={sfSoldeInitial.date_debut} onChange={(e) => setSfSoldeInitial({ ...sfSoldeInitial, date_debut: e.target.value })} />
+                  </div>
+                  <div className="col-md-4">
+                    <label className="form-label">Observation</label>
+                    <input type="text" className="form-control" value={sfSoldeInitial.observation} onChange={(e) => setSfSoldeInitial({ ...sfSoldeInitial, observation: e.target.value })} />
+                  </div>
+                  <div className="col-md-2 d-flex align-items-end">
+                    <button className="btn btn-success w-100" onClick={enregistrerSoldeInitial}>💾 Enregistrer</button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="card p-0">
+                <div className="card-header bg-info text-white fw-bold">📦 Stock Initial par Produit</div>
+                <table className="table table-bordered table-hover mb-0">
+                  <thead className="table-dark"><tr><th>Code</th><th>Designation</th><th>Unite</th><th className="text-center">Quantité Initiale</th><th className="text-center">Action</th></tr></thead>
+                  <tbody>
+                    {sfStockInitialClient.map((p) => (
+                      <tr key={p.id_produit}>
+                        <td><strong>{p.code_produit}</strong></td><td>{p.designation}</td><td>{p.unite}</td>
+                        <td className="text-center">
+                          <input type="number" min="0" className="form-control form-control-sm text-center" style={{ width: "120px", margin: "auto" }}
+                            value={sfStockInitialEdite[p.id_produit] ?? p.quantite}
+                            onChange={(e) => setSfStockInitialEdite({ ...sfStockInitialEdite, [p.id_produit]: e.target.value })} />
+                        </td>
+                        <td className="text-center">
+                          <button className="btn btn-success btn-sm" onClick={() => enregistrerStockInitialClient(p.id_produit)}>💾 Enregistrer</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="mt-3 text-end">
+                <button className="btn btn-primary btn-lg" onClick={() => setSfEtape(2)}>Suivant → Inventaire & Périmés</button>
+              </div>
+            </div>
+          )}
+
+          {/* ETAPE 2 — Inventaire et Périmés */}
+          {sfEtape === 2 && (
+            <div>
+              <div className="card p-3 mb-3 border-warning">
+                <div className="row g-3 align-items-end">
+                  <div className="col-md-4">
+                    <label className="form-label fw-bold">Date Inventaire (jj/mm/aaaa)</label>
+                    <input type="text" className={`form-control ${sfSaisieDate && !dateValide(sfSaisieDate) ? "is-invalid" : sfSaisieDate && dateValide(sfSaisieDate) ? "is-valid" : ""}`}
+                      placeholder="jj/mm/aaaa" maxLength={10} value={sfSaisieDate}
+                      onChange={(e) => setSfSaisieDate(e.target.value)} />
+                    {sfSaisieDate && !dateValide(sfSaisieDate) && <div className="invalid-feedback">Date invalide</div>}
+                  </div>
+                </div>
+              </div>
+
+              <div className="card p-0">
+                <div className="card-header bg-warning text-dark fw-bold">📋 Inventaire Physique & Périmés par Produit</div>
+                <table className="table table-bordered table-hover mb-0">
+                  <thead className="table-dark">
+                    <tr><th>Code</th><th>Designation</th><th>Unite</th><th className="text-center">S.MAD</th><th className="text-center bg-warning text-dark">S.INV (Inventaire)</th><th className="text-center bg-danger text-white">S.PERIMES (Périmés)</th></tr>
+                  </thead>
+                  <tbody>
+                    {sfStockInitialClient.map((p) => {
+                      const si = Number(sfStockInitialEdite[p.id_produit] ?? p.quantite);
+                      return (
+                        <tr key={p.id_produit}>
+                          <td><strong>{p.code_produit}</strong></td><td>{p.designation}</td><td>{p.unite}</td>
+                          <td className="text-center fw-bold text-primary">{si}</td>
+                          <td className="text-center">
+                            <input type="number" min="0" className="form-control form-control-sm text-center" style={{ width: "120px", margin: "auto" }}
+                              value={sfInventaireEdite[p.id_produit] ?? 0}
+                              onChange={(e) => setSfInventaireEdite({ ...sfInventaireEdite, [p.id_produit]: e.target.value })} />
+                          </td>
+                          <td className="text-center">
+                            <input type="number" min="0" className="form-control form-control-sm text-center" style={{ width: "120px", margin: "auto" }}
+                              value={sfPerimesEdite[p.id_produit] ?? 0}
+                              onChange={(e) => setSfPerimesEdite({ ...sfPerimesEdite, [p.id_produit]: e.target.value })} />
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div className="mt-3 d-flex justify-content-between">
+                <button className="btn btn-secondary" onClick={() => setSfEtape(1)}>← Retour</button>
+                <button className="btn btn-success btn-lg" onClick={enregistrerInventaireEtPerimes}>💾 Enregistrer & Calculer →</button>
+              </div>
+            </div>
+          )}
+
+          {/* ETAPE 3 — Situation Financière */}
+          {sfEtape === 3 && (
+            <div>
+              <div className="card p-3 mb-3 border-success">
+                <div className="row g-3 align-items-end">
+                  <div className="col-md-4">
+                    <label className="form-label fw-bold">Date Inventaire (jj/mm/aaaa)</label>
+                    <input type="text" className={`form-control ${sfDateInventaire && !dateValide(sfDateInventaire) ? "is-invalid" : sfDateInventaire && dateValide(sfDateInventaire) ? "is-valid" : ""}`}
+                      placeholder="jj/mm/aaaa" maxLength={10} value={sfDateInventaire}
+                      onChange={(e) => setSfDateInventaire(e.target.value)} />
+                  </div>
+                  <div className="col-md-3">
+                    <button className="btn btn-primary w-100" onClick={chargerSituationFinanciere}>🔍 Afficher la Situation</button>
+                  </div>
+                </div>
+              </div>
+
+              {sfLoading && (<div className="text-center my-4"><div className="spinner-border text-primary"></div></div>)}
+
+              {sfSituationData && !sfLoading && (
+                <div className="card p-3">
+                  <div className="d-flex justify-content-between align-items-center mb-3">
+                    <div>
+                      <h5 className="text-primary mb-1">Client : {sfSituationData.client?.nom} ({sfSituationData.client?.code_client})</h5>
+                      <small className="text-muted">Date Inventaire : {formatDateFR(sfSituationData.date_inventaire)}</small>
+                    </div>
+                    <div>
+                      <button className="btn btn-secondary me-2" onClick={() => setSfEtape(2)}>← Retour</button>
+                      <button className="btn btn-success" onClick={imprimerSituationFinancierePDF}>🖨️ Imprimer PDF</button>
+                    </div>
+                  </div>
+
+                  <div className="row mb-3">
+                    <div className="col-md-4"><div className="card bg-danger text-white text-center p-2"><small>Solde Initial</small><h5>{Number(sfSituationData.totaux.solde_initial).toLocaleString("fr-FR")} MRU</h5></div></div>
+                    <div className="col-md-4"><div className="card bg-warning text-dark text-center p-2"><small>Total Valeur S.V</small><h5>{Number(sfSituationData.totaux.total_valeur_sv).toLocaleString("fr-FR")} MRU</h5></div></div>
+                    <div className="col-md-4"><div className="card bg-primary text-white text-center p-2"><small>TOTAL CREANCE</small><h5>{Number(sfSituationData.totaux.total_creance).toLocaleString("fr-FR")} MRU</h5></div></div>
+                  </div>
+
+                  <div className="table-responsive">
+                    <table className="table table-bordered table-sm table-hover">
+                      <thead className="table-dark">
+                        <tr>
+                          <th>Code</th><th>Designation</th><th>Unite</th>
+                          <th className="text-center text-info">S.I Client</th>
+                          <th className="text-center text-success">Sorties</th>
+                          <th className="text-center text-primary">S.MAD</th>
+                          <th className="text-center text-warning">S.INV</th>
+                          <th className="text-center text-danger">S.PERIMES</th>
+                          <th className="text-center">S.V</th>
+                          <th className="text-center">Prix Vente</th>
+                          <th className="text-center fw-bold">Valeur S.V</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sfSituationData.lignes.map((l, i) => (
+                          <tr key={i} className={l.s_v < 0 ? "table-danger" : ""}>
+                            <td>{l.code_produit}</td><td>{l.designation}</td><td>{l.unite}</td>
+                            <td className="text-center">{Number(l.stock_initial_client).toFixed(2)}</td>
+                            <td className="text-center text-success">+{Number(l.total_sorties_client).toFixed(2)}</td>
+                            <td className="text-center text-primary fw-bold">{Number(l.s_mad).toFixed(2)}</td>
+                            <td className="text-center text-warning">{Number(l.s_inv).toFixed(2)}</td>
+                            <td className="text-center text-danger">{Number(l.s_perimes).toFixed(2)}</td>
+                            <td className="text-center fw-bold">{Number(l.s_v).toFixed(2)}</td>
+                            <td className="text-center">{Number(l.prix_vente).toFixed(2)}</td>
+                            <td className="text-center fw-bold text-primary">{Number(l.valeur_sv).toLocaleString("fr-FR", { minimumFractionDigits: 2 })}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot className="table-dark fw-bold">
+                        <tr>
+                          <td colSpan="10" className="text-end">TOTAL VALEUR S.V :</td>
+                          <td className="text-center text-warning">{Number(sfSituationData.totaux.total_valeur_sv).toLocaleString("fr-FR", { minimumFractionDigits: 2 })} MRU</td>
+                        </tr>
+                        <tr className="table-primary">
+                          <td colSpan="10" className="text-end fw-bold">+ SOLDE INITIAL :</td>
+                          <td className="text-center fw-bold">{Number(sfSituationData.totaux.solde_initial).toLocaleString("fr-FR", { minimumFractionDigits: 2 })} MRU</td>
+                        </tr>
+                        <tr style={{ backgroundColor: "#0d6efd", color: "white" }}>
+                          <td colSpan="10" className="text-end fw-bold fs-6">= TOTAL CRÉANCE :</td>
+                          <td className="text-center fw-bold fs-6">{Number(sfSituationData.totaux.total_creance).toLocaleString("fr-FR", { minimumFractionDigits: 2 })} MRU</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+
   const colonnes = { stock: ["code_produit", "designation", "unite", "total_entree", "total_sortie", "stock_actuel"], produits: ["code_produit", "designation", "unite", "prix_achat", "prix_vente", "stock_minimum"], clients: ["code_client", "nom", "telephone", "adresse"], fournisseurs: ["code_fournisseur", "nom", "telephone", "adresse"], "liste-entree": ["numero_bon", "date_bon", "nom_fournisseur", "observation"], "liste-sortie": ["numero_bon", "date_bon", "nom_client", "observation"] };
   const idCols = { produits: "id_produit", clients: "id_client", fournisseurs: "id_fournisseur" };
-  const titres = { stock: "Stock Actuel", produits: "Produits", clients: "Clients", fournisseurs: "Fournisseurs", "bon-entree": "Nouveau Bon d'Entree", "bon-sortie": "Nouveau Bon de Sortie", "liste-entree": "Liste des Bons d'Entree", "liste-sortie": "Liste des Bons de Sortie", "graphiques": "Graphiques", "mouvements": "Fiche Mouvements", "fiche-stock": "Fiche de Stock", "stock-initial": "Stock Initial", ...(isAdmin ? { "utilisateurs": "Utilisateurs" } : {}) };
+  const titres = { stock: "Stock Actuel", produits: "Produits", clients: "Clients", fournisseurs: "Fournisseurs", "bon-entree": "Nouveau Bon d'Entree", "bon-sortie": "Nouveau Bon de Sortie", "liste-entree": "Liste des Bons d'Entree", "liste-sortie": "Liste des Bons de Sortie", "graphiques": "Graphiques", "mouvements": "Fiche Mouvements", "fiche-stock": "Fiche de Stock", "stock-initial": "Stock Initial", "situation-financiere": "Situation Financiere Client", ...(isAdmin ? { "utilisateurs": "Utilisateurs" } : {}) };
   const donneesFiltrees = donnees.filter((d) => Object.values(d).some((v) => String(v).toLowerCase().includes(recherche.toLowerCase())));
 
   const renderFormAjout = () => {
@@ -748,7 +1110,7 @@ function App() {
           {Object.keys(titres).map((p) => (
             <button key={p} onClick={() => { setPage(p); resetBon(); setBonDetail(null); setShowEditBon(false); setFicheMouvements(null); setProduitSelectionne(""); setFicheStockData(null); setStockInitialEnEdition(null); }}
               className={`btn me-2 mb-2 ${page === p ? "btn-primary" : "btn-secondary"}`}>
-              {p === "graphiques" ? "📊 " : p === "mouvements" ? "📋 " : p === "fiche-stock" ? "📊 " : p === "stock-initial" ? "📦 " : p === "utilisateurs" ? "👥 " : ""}{titres[p]}
+              {p === "graphiques" ? "📊 " : p === "mouvements" ? "📋 " : p === "fiche-stock" ? "📊 " : p === "stock-initial" ? "📦 " : p === "utilisateurs" ? "👥 " : p === "situation-financiere" ? "💰 " : ""}{titres[p]}
             </button>
           ))}
         </div>
@@ -757,6 +1119,7 @@ function App() {
           : page === "mouvements" ? renderMouvements()
           : page === "fiche-stock" ? renderFicheStock()
           : page === "stock-initial" ? renderStockInitial()
+          : page === "situation-financiere" ? renderSituationFinanciere()
           : page === "utilisateurs" && isAdmin ? renderUtilisateurs()
           : page === "bon-entree" ? renderFormulaireBon("bon-entree")
           : page === "bon-sortie" ? renderFormulaireBon("bon-sortie")
