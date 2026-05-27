@@ -126,7 +126,7 @@ function App() {
   const produitsRuptureTotale = stockData.filter((s) => Number(s.stock_actuel) <= 0);
   const produitsStockFaible = stockData.filter((s) => Number(s.stock_actuel) > 0 && s.stock_minimum !== null && Number(s.stock_actuel) <= Number(s.stock_minimum));
   const totalAlertes = produitsRuptureTotale.length + produitsStockFaible.length;
-  const dataStockActuel = stockData.map((s) => ({ name: s.code_produit, designation: s.designation, "Stock Actuel": Number(s.stock_actuel), "Stock Minimum": Number(s.stock_minimum) || 0 }));
+  const dataStockActuel = stockData.map((s) => ({ name: s.code_produit, designation: s.designation, "Stock Initial": Number(s.stock_initial), "Stock Actuel": Number(s.stock_actuel), "Stock Minimum": Number(s.stock_minimum) || 0 }));
   const dataEntreesSorties = stockData.map((s) => ({ name: s.code_produit, designation: s.designation, "Entrees": Number(s.total_entree), "Sorties": Number(s.total_sortie) }));
 
   const resetBon = () => { setBon({ numero_bon: "", date_bon: "", id_fournisseur: "", id_client: "", observation: "" }); setLignes([{ id_produit: "", quantite: "", prix_unitaire: "" }]); setMessage(""); setSaisieDate(""); setSaisieEditionDate(""); };
@@ -1090,7 +1090,7 @@ function App() {
     </div>
   );
 
-  const colonnes = { stock: ["code_produit", "designation", "unite", "total_entree", "total_sortie", "stock_actuel"], produits: ["code_produit", "designation", "unite", "prix_achat", "prix_vente", "stock_minimum"], clients: ["code_client", "nom", "telephone", "adresse"], fournisseurs: ["code_fournisseur", "nom", "telephone", "adresse"], "liste-entree": ["numero_bon", "date_bon", "nom_fournisseur", "observation"], "liste-sortie": ["numero_bon", "date_bon", "nom_client", "observation"] };
+  const colonnes = { stock: ["code_produit", "designation", "unite", "stock_initial", "total_entree", "total_sortie", "stock_actuel"], produits: ["code_produit", "designation", "unite", "prix_achat", "prix_vente", "stock_minimum"], clients: ["code_client", "nom", "telephone", "adresse"], fournisseurs: ["code_fournisseur", "nom", "telephone", "adresse"], "liste-entree": ["numero_bon", "date_bon", "nom_fournisseur", "observation"], "liste-sortie": ["numero_bon", "date_bon", "nom_client", "observation"] };
   const idCols = { produits: "id_produit", clients: "id_client", fournisseurs: "id_fournisseur" };
   const titres = { stock: "Stock Actuel", produits: "Produits", clients: "Clients", fournisseurs: "Fournisseurs", "bon-entree": "Nouveau Bon d'Entree", "bon-sortie": "Nouveau Bon de Sortie", "liste-entree": "Liste des Bons d'Entree", "liste-sortie": "Liste des Bons de Sortie", "graphiques": "Graphiques", "mouvements": "Fiche Mouvements", "fiche-stock": "Fiche de Stock", "stock-initial": "Stock Initial", "situation-financiere": "Situation Financiere Client", ...(isAdmin ? { "utilisateurs": "Utilisateurs" } : {}) };
   const donneesFiltrees = donnees.filter((d) => Object.values(d).some((v) => String(v).toLowerCase().includes(recherche.toLowerCase())));
