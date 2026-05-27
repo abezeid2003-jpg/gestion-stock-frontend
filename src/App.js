@@ -93,6 +93,13 @@ function App() {
   const [sfEtape, setSfEtape] = useState(1);
   const [sfSaisieDate, setSfSaisieDate] = useState("");
 
+  // ETATS VERSEMENTS
+  const [versementsData, setVersementsData] = useState([]);
+  const [newVersement, setNewVersement] = useState({ date_versement: "", montant: "", mode_paiement: "", reference: "", observation: "" });
+  const [newVersementDate, setNewVersementDate] = useState("");
+  const [showFormVersement, setShowFormVersement] = useState(false);
+  const [versementAModifier, setVersementAModifier] = useState(null);
+
   const chargerStats = () => {
     if (!token) return;
     Promise.all([
@@ -615,6 +622,42 @@ function App() {
     </div>
   );
 
+  const chargerVersements = async (id_client) => {
+    try {
+      const data = await fetch(`${API}/versements/${id_client}`, { headers: headers() }).then((r) => r.json());
+      setVersementsData(data);
+    } catch (err) { setMessage("Erreur chargement versements !"); }
+  };
+
+  const ajouterVersement = async () => {
+    if (!newVersementDate || !dateValide(newVersementDate)) { setMessage("Date versement invalide !"); return; }
+    if (!newVersement.montant || Number(newVersement.montant) <= 0) { setMessage("Montant invalide !"); return; }
+    try {
+      const response = await fetch(`${API}/versements`, {
+        method: "POST", headers: headers(),
+        body: JSON.stringify({ id_client: sfClientSelectionne, date_versement: parseFR(newVersementDate), montant: newVersement.montant, mode_paiement: newVersement.mode_paiement, reference: newVersement.reference, observation: newVersement.observation })
+      });
+      const data = await response.json();
+      if (data.success) {
+        setMessage("Versement enregistre avec succes !");
+        setNewVersement({ date_versement: "", montant: "", mode_paiement: "", reference: "", observation: "" });
+        setNewVersementDate("");
+        setShowFormVersement(false);
+        chargerVersements(sfClientSelectionne);
+      } else { setMessage("Erreur : " + data.error); }
+    } catch (err) { setMessage("Erreur de connexion !"); }
+  };
+
+  const supprimerVersement = async (id) => {
+    if (!window.confirm("Confirmer la suppression ?")) return;
+    try {
+      const response = await fetch(`${API}/versements/${id}`, { method: "DELETE", headers: headers() });
+      const data = await response.json();
+      if (data.success) { setMessage("Versement supprime !"); chargerVersements(sfClientSelectionne); }
+      else { setMessage("Erreur : " + data.error); }
+    } catch (err) { setMessage("Erreur de connexion !"); }
+  };
+
   const chargerSituationFinanciere = async () => {
     if (!sfClientSelectionne || !sfDateInventaire || !dateValide(sfDateInventaire)) { setMessage("Choisissez un client et une date valide !"); return; }
     setSfLoading(true); setSfSituationData(null);
@@ -651,6 +694,7 @@ function App() {
         setSfSoldeInitialId(null);
         setSfSoldeInitial({ montant: 0, date_debut: "", observation: "" });
       }
+      await chargerVersements(sfClientSelectionne);
     } catch (err) { setMessage("Erreur de chargement !"); }
     setSfLoading(false);
   };
@@ -702,6 +746,8 @@ function App() {
     doc.text(`Client : ${client.nom} (${client.code_client})`, 15, 35);
     doc.text(`Date Inventaire : ${formatDateFR(date_inventaire)}`, 150, 35);
     doc.text(`Solde Initial : ${Number(totaux.solde_initial).toLocaleString("fr-FR")} MRU`, 15, 42);
+    const total_versements = versements.rows ? versements.rows.reduce((sum, v) => sum + Number(v.montant), 0) : 0;
+    doc.text(`Total Versements : ${Number(totaux.total_versements).toLocaleString("fr-FR")} MRU`, 150, 42);
     doc.setDrawColor(...couleur); doc.setLineWidth(0.5); doc.line(15, 47, 282, 47);
     autoTable(doc, {
       startY: 52,
@@ -903,9 +949,10 @@ function App() {
                   </div>
 
                   <div className="row mb-3">
-                    <div className="col-md-4"><div className="card bg-danger text-white text-center p-2"><small>Solde Initial</small><h5>{Number(sfSituationData.totaux.solde_initial).toLocaleString("fr-FR")} MRU</h5></div></div>
-                    <div className="col-md-4"><div className="card bg-warning text-dark text-center p-2"><small>Total Valeur S.V</small><h5>{Number(sfSituationData.totaux.total_valeur_sv).toLocaleString("fr-FR")} MRU</h5></div></div>
-                    <div className="col-md-4"><div className="card bg-primary text-white text-center p-2"><small>TOTAL CREANCE</small><h5>{Number(sfSituationData.totaux.total_creance).toLocaleString("fr-FR")} MRU</h5></div></div>
+                    <div className="col-md-3"><div className="card bg-danger text-white text-center p-2"><small>Solde Initial</small><h5>{Number(sfSituationData.totaux.solde_initial).toLocaleString("fr-FR")} MRU</h5></div></div>
+                    <div className="col-md-3"><div className="card bg-warning text-dark text-center p-2"><small>Total Valeur S.V</small><h5>{Number(sfSituationData.totaux.total_valeur_sv).toLocaleString("fr-FR")} MRU</h5></div></div>
+                    <div className="col-md-3"><div className="card bg-info text-white text-center p-2"><small>Total Versements</small><h5>-{Number(sfSituationData.totaux.total_versements).toLocaleString("fr-FR")} MRU</h5></div></div>
+                    <div className="col-md-3"><div className="card bg-primary text-white text-center p-2"><small>CREANCE NETTE</small><h5>{Number(sfSituationData.totaux.creance_nette).toLocaleString("fr-FR")} MRU</h5></div></div>
                   </div>
 
                   <div className="table-responsive">
@@ -943,16 +990,98 @@ function App() {
                           <td colSpan="10" className="text-end">TOTAL VALEUR S.V :</td>
                           <td className="text-center text-warning">{Number(sfSituationData.totaux.total_valeur_sv).toLocaleString("fr-FR", { minimumFractionDigits: 2 })} MRU</td>
                         </tr>
-                        <tr className="table-primary">
-                          <td colSpan="10" className="text-end fw-bold">+ SOLDE INITIAL :</td>
-                          <td className="text-center fw-bold">{Number(sfSituationData.totaux.solde_initial).toLocaleString("fr-FR", { minimumFractionDigits: 2 })} MRU</td>
+                        <tr className="table-secondary">
+                          <td colSpan="10" className="text-end">+ SOLDE INITIAL :</td>
+                          <td className="text-center">{Number(sfSituationData.totaux.solde_initial).toLocaleString("fr-FR", { minimumFractionDigits: 2 })} MRU</td>
+                        </tr>
+                        <tr className="table-warning">
+                          <td colSpan="10" className="text-end fw-bold">= TOTAL CREANCE :</td>
+                          <td className="text-center fw-bold">{Number(sfSituationData.totaux.total_creance).toLocaleString("fr-FR", { minimumFractionDigits: 2 })} MRU</td>
+                        </tr>
+                        <tr className="table-info">
+                          <td colSpan="10" className="text-end">- TOTAL VERSEMENTS :</td>
+                          <td className="text-center">{Number(sfSituationData.totaux.total_versements).toLocaleString("fr-FR", { minimumFractionDigits: 2 })} MRU</td>
                         </tr>
                         <tr style={{ backgroundColor: "#0d6efd", color: "white" }}>
-                          <td colSpan="10" className="text-end fw-bold fs-6">= TOTAL CRÉANCE :</td>
-                          <td className="text-center fw-bold fs-6">{Number(sfSituationData.totaux.total_creance).toLocaleString("fr-FR", { minimumFractionDigits: 2 })} MRU</td>
+                          <td colSpan="10" className="text-end fw-bold fs-6">= CREANCE NETTE :</td>
+                          <td className="text-center fw-bold fs-6">{Number(sfSituationData.totaux.creance_nette).toLocaleString("fr-FR", { minimumFractionDigits: 2 })} MRU</td>
                         </tr>
                       </tfoot>
                     </table>
+                  </div>
+                  {/* SECTION VERSEMENTS */}
+                  <div className="card mt-4 border-info">
+                    <div className="card-header bg-info text-white d-flex justify-content-between align-items-center">
+                      <strong>💳 Versements du Client</strong>
+                      <button className="btn btn-light btn-sm" onClick={() => setShowFormVersement(!showFormVersement)}>
+                        {showFormVersement ? "Annuler" : "+ Ajouter Versement"}
+                      </button>
+                    </div>
+                    {showFormVersement && (
+                      <div className="card-body border-bottom">
+                        <div className="row g-2">
+                          <div className="col-md-2">
+                            <label className="form-label">Date *</label>
+                            <input type="text" className={`form-control form-control-sm ${newVersementDate && !dateValide(newVersementDate) ? "is-invalid" : newVersementDate && dateValide(newVersementDate) ? "is-valid" : ""}`} placeholder="jj/mm/aaaa" maxLength={10} value={newVersementDate} onChange={(e) => setNewVersementDate(e.target.value)} />
+                          </div>
+                          <div className="col-md-2">
+                            <label className="form-label">Montant (MRU) *</label>
+                            <input type="number" min="0" className="form-control form-control-sm" value={newVersement.montant} onChange={(e) => setNewVersement({ ...newVersement, montant: e.target.value })} />
+                          </div>
+                          <div className="col-md-2">
+                            <label className="form-label">Mode Paiement</label>
+                            <select className="form-select form-select-sm" value={newVersement.mode_paiement} onChange={(e) => setNewVersement({ ...newVersement, mode_paiement: e.target.value })}>
+                              <option value="">-- Choisir --</option>
+                              <option value="Especes">Espèces</option>
+                              <option value="Cheque">Chèque</option>
+                              <option value="Virement">Virement</option>
+                              <option value="Autre">Autre</option>
+                            </select>
+                          </div>
+                          <div className="col-md-2">
+                            <label className="form-label">Référence</label>
+                            <input type="text" className="form-control form-control-sm" value={newVersement.reference} onChange={(e) => setNewVersement({ ...newVersement, reference: e.target.value })} />
+                          </div>
+                          <div className="col-md-2">
+                            <label className="form-label">Observation</label>
+                            <input type="text" className="form-control form-control-sm" value={newVersement.observation} onChange={(e) => setNewVersement({ ...newVersement, observation: e.target.value })} />
+                          </div>
+                          <div className="col-md-2 d-flex align-items-end">
+                            <button className="btn btn-success btn-sm w-100" onClick={ajouterVersement}>💾 Enregistrer</button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    <div className="card-body p-0">
+                      {versementsData.length === 0 ? (
+                        <p className="text-muted text-center p-3">Aucun versement enregistré</p>
+                      ) : (
+                        <table className="table table-sm table-bordered mb-0">
+                          <thead className="table-info">
+                            <tr><th>Date</th><th>Montant (MRU)</th><th>Mode</th><th>Référence</th><th>Observation</th>{isAdmin && <th>Action</th>}</tr>
+                          </thead>
+                          <tbody>
+                            {versementsData.map((v) => (
+                              <tr key={v.id_versement}>
+                                <td>{formatDateFR(v.date_versement?.substring(0, 10))}</td>
+                                <td className="fw-bold text-success">{Number(v.montant).toLocaleString("fr-FR")} MRU</td>
+                                <td>{v.mode_paiement}</td>
+                                <td>{v.reference}</td>
+                                <td>{v.observation}</td>
+                                {isAdmin && <td><button className="btn btn-danger btn-sm" onClick={() => supprimerVersement(v.id_versement)}>🗑️</button></td>}
+                              </tr>
+                            ))}
+                          </tbody>
+                          <tfoot className="table-success fw-bold">
+                            <tr>
+                              <td className="text-end">TOTAL :</td>
+                              <td className="text-success">{Number(sfSituationData.totaux.total_versements).toLocaleString("fr-FR")} MRU</td>
+                              <td colSpan={isAdmin ? 4 : 3}></td>
+                            </tr>
+                          </tfoot>
+                        </table>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}
