@@ -519,6 +519,7 @@ function App() {
     doc.setDrawColor(...couleur); doc.setLineWidth(0.5); doc.line(15, 44, 195, 44);
     autoTable(doc, {
       startY: 48,
+      margin: { left: 15, right: 15 },
       head: [["Date", "N° Bon", "Type", "Fourn./Client", "Entree", "Sortie", "Stock"]],
       body: tableauLignes.map((l) => [
         l.date,
@@ -536,26 +537,29 @@ function App() {
       styles: { fontSize: 8, cellPadding: 2 },
       columnStyles: {
         0: { cellWidth: 22 },
-        1: { cellWidth: 22 },
+        1: { cellWidth: 18 },
         2: { cellWidth: 22 },
-        3: { cellWidth: 60 },
-        4: { cellWidth: 23, halign: "right" },
-        5: { cellWidth: 23, halign: "right" },
-        6: { cellWidth: 23, halign: "right" }
+        3: { cellWidth: 52 },
+        4: { cellWidth: 22, halign: "right" },
+        5: { cellWidth: 22, halign: "right" },
+        6: { cellWidth: 22, halign: "right" }
       },
-      didParseCell: (data) => { if (data.section === "body") { const type = tableauLignes[data.row.index]?.type; if (type === "Stock Initial") data.cell.styles.fillColor = [217, 237, 247]; else if (type === "Entree") data.cell.styles.fillColor = [212, 237, 218]; else if (type === "Sortie") data.cell.styles.fillColor = [248, 215, 218]; } }
+      didParseCell: (data) => {
+        if (data.section === "body") { const type = tableauLignes[data.row.index]?.type; if (type === "Stock Initial") data.cell.styles.fillColor = [217, 237, 247]; else if (type === "Entree") data.cell.styles.fillColor = [212, 237, 218]; else if (type === "Sortie") data.cell.styles.fillColor = [248, 215, 218]; }
+        if (data.section === "foot" && data.column.index >= 4) { data.cell.styles.halign = "right"; }
+      }
     });
     const finalY = doc.lastAutoTable.finalY + 6;
     doc.setFontSize(9); doc.setFont("helvetica", "bold");
     doc.setFillColor(23, 162, 184); doc.rect(15, finalY, 42, 10, "F");
-    doc.setFillColor(25, 135, 84); doc.rect(60, finalY, 42, 10, "F");
-    doc.setFillColor(220, 53, 69); doc.rect(105, finalY, 42, 10, "F");
-    doc.setFillColor(13, 110, 253); doc.rect(150, finalY, 45, 10, "F");
+    doc.setFillColor(25, 135, 84); doc.rect(61, finalY, 42, 10, "F");
+    doc.setFillColor(220, 53, 69); doc.rect(107, finalY, 42, 10, "F");
+    doc.setFillColor(13, 110, 253); doc.rect(153, finalY, 42, 10, "F");
     doc.setTextColor(255, 255, 255);
     doc.text(`S.I: ${fmt(totaux.qte_initiale)}`, 36, finalY + 7, { align: "center" });
-    doc.text(`Entrees: +${fmt(totaux.total_entrees)}`, 81, finalY + 7, { align: "center" });
-    doc.text(`Sorties: -${fmt(totaux.total_sorties)}`, 126, finalY + 7, { align: "center" });
-    doc.text(`Stock Final: ${fmt(totaux.stock_final)}`, 172, finalY + 7, { align: "center" });
+    doc.text(`Entrees: +${fmt(totaux.total_entrees)}`, 82, finalY + 7, { align: "center" });
+    doc.text(`Sorties: -${fmt(totaux.total_sorties)}`, 128, finalY + 7, { align: "center" });
+    doc.text(`Stock Final: ${fmt(totaux.stock_final)}`, 174, finalY + 7, { align: "center" });
     const pageHeight = doc.internal.pageSize.height;
     doc.setFontSize(8); doc.setTextColor(150, 150, 150); doc.setFont("helvetica", "normal");
     doc.text(`Document genere le ${new Date().toLocaleDateString("fr-FR")} a ${new Date().toLocaleTimeString("fr-FR")}`, 105, pageHeight - 8, { align: "center" });
