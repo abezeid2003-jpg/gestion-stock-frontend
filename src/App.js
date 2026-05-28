@@ -478,7 +478,26 @@ function App() {
     doc.setTextColor(0, 0, 0); doc.setFontSize(11); doc.setFont("helvetica", "bold");
     if (ficheStockData.dateDebut === ficheStockData.dateFin) { doc.text(`Date : ${ficheStockData.dateDebut}`, 15, 36); } else { doc.text(`Periode : du ${ficheStockData.dateDebut} au ${ficheStockData.dateFin}`, 15, 36); }
     doc.setDrawColor(...couleur); doc.setLineWidth(0.5); doc.line(15, 41, 195, 41);
-    autoTable(doc, { startY: 46, head: [["Code", "Designation", "Unite", "Stock Initial", "Total Entrees", "Total Sorties", "Stock Disponible"]], body: ficheStockData.lignes.map((l) => [l.code_produit, l.designation, l.unite, fmt(l.stock_initial), fmt(l.total_entrees), fmt(l.total_sorties), fmt(l.stock_disponible)]), headStyles: { fillColor: couleur, textColor: 255, fontStyle: "bold" }, alternateRowStyles: { fillColor: [249, 249, 249] }, styles: { fontSize: 9, cellPadding: 3 }, columnStyles: { 0: { cellWidth: 20 }, 1: { cellWidth: 55 }, 2: { cellWidth: 18 }, 3: { cellWidth: 23, halign: "right" }, 4: { cellWidth: 23, halign: "right" }, 5: { cellWidth: 23, halign: "right" }, 6: { cellWidth: 28, halign: "right" } } });
+    autoTable(doc, {
+      startY: 46,
+      margin: { left: 15, right: 15 },
+      head: [["Code", "Designation", "Unite", "S. Initial", "Entrees", "Sorties", "S. Disponible"]],
+      body: ficheStockData.lignes.map((l) => [l.code_produit, l.designation, l.unite, fmt(l.stock_initial), fmt(l.total_entrees), fmt(l.total_sorties), fmt(l.stock_disponible)]),
+      headStyles: { fillColor: couleur, textColor: 255, fontStyle: "bold", fontSize: 8 },
+      alternateRowStyles: { fillColor: [249, 249, 249] },
+      styles: { fontSize: 8, cellPadding: 2 },
+      columnStyles: {
+        0: { cellWidth: 18 },
+        1: { cellWidth: 48 },
+        2: { cellWidth: 14 },
+        3: { cellWidth: 22, halign: "right" },
+        4: { cellWidth: 22, halign: "right" },
+        5: { cellWidth: 22, halign: "right" },
+        6: { cellWidth: 26, halign: "right" }
+      }
+    });
+    const finalY = doc.lastAutoTable.finalY;
+    doc.setFillColor(...couleur); doc.rect(0, finalY, 210, 8, "F");
     const pageHeight = doc.internal.pageSize.height;
     doc.setFontSize(9); doc.setTextColor(150, 150, 150);
     doc.text(`Document genere le ${new Date().toLocaleDateString("fr-FR")} a ${new Date().toLocaleTimeString("fr-FR")}`, 105, pageHeight - 10, { align: "center" });
