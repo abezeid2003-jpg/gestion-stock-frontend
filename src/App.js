@@ -487,17 +487,17 @@ function App() {
       alternateRowStyles: { fillColor: [249, 249, 249] },
       styles: { fontSize: 8, cellPadding: 2 },
       columnStyles: {
-        0: { cellWidth: 18 },
-        1: { cellWidth: 50 },
-        2: { cellWidth: 12 },
-        3: { cellWidth: 20, halign: "right" },
-        4: { cellWidth: 20, halign: "right" },
-        5: { cellWidth: 20, halign: "right" },
-        6: { cellWidth: 20, halign: "right" }
+        0: { cellWidth: 20 },
+        1: { cellWidth: 58 },
+        2: { cellWidth: 14 },
+        3: { cellWidth: 22, halign: "right" },
+        4: { cellWidth: 22, halign: "right" },
+        5: { cellWidth: 22, halign: "right" },
+        6: { cellWidth: 22, halign: "right" }
       }
     });
     const finalY = doc.lastAutoTable.finalY;
-    const tableWidth = 18 + 50 + 12 + 20 + 20 + 20 + 20;
+    const tableWidth = 20 + 58 + 14 + 22 + 22 + 22 + 22;
     doc.setDrawColor(...couleur); doc.setLineWidth(0.5);
     doc.line(15, finalY, 15 + tableWidth, finalY);
     const pageHeight = doc.internal.pageSize.height;
