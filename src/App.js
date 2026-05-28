@@ -488,16 +488,18 @@ function App() {
       styles: { fontSize: 8, cellPadding: 2 },
       columnStyles: {
         0: { cellWidth: 18 },
-        1: { cellWidth: 48 },
-        2: { cellWidth: 14 },
-        3: { cellWidth: 22, halign: "right" },
-        4: { cellWidth: 22, halign: "right" },
-        5: { cellWidth: 22, halign: "right" },
-        6: { cellWidth: 26, halign: "right" }
+        1: { cellWidth: 50 },
+        2: { cellWidth: 12 },
+        3: { cellWidth: 20, halign: "right" },
+        4: { cellWidth: 20, halign: "right" },
+        5: { cellWidth: 20, halign: "right" },
+        6: { cellWidth: 20, halign: "right" }
       }
     });
     const finalY = doc.lastAutoTable.finalY;
-    doc.setFillColor(...couleur); doc.rect(0, finalY, 210, 8, "F");
+    const tableWidth = 18 + 50 + 12 + 20 + 20 + 20 + 20;
+    doc.setDrawColor(...couleur); doc.setLineWidth(0.5);
+    doc.line(15, finalY, 15 + tableWidth, finalY);
     const pageHeight = doc.internal.pageSize.height;
     doc.setFontSize(9); doc.setTextColor(150, 150, 150);
     doc.text(`Document genere le ${new Date().toLocaleDateString("fr-FR")} a ${new Date().toLocaleTimeString("fr-FR")}`, 105, pageHeight - 10, { align: "center" });
