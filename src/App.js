@@ -606,7 +606,7 @@ function App() {
       startY: 70,
       margin: { left: 15, right: 15 },
       head: [["Code", "Designation", "Quantite", "Prix Unitaire", "Montant (MRU)"]],
-      body: lignesDetail.map((l) => [l.code_produit || "-", l.designation || "-", l.quantite, formatMontant(l.prix_unitaire), formatMontant(l.montant)]),
+      body: lignesDetail.map((l) => [l.code_produit || "-", l.designation || "-", formatMontant(l.quantite), formatMontant(l.prix_unitaire), formatMontant(l.montant)]),
       foot: [["", "", "", "TOTAL GENERAL :", formatMontant(totalGeneral) + " MRU"]],
       headStyles: { fillColor: couleur, textColor: 255, fontStyle: "bold" },
       footStyles: { fillColor: [240, 240, 240], textColor: 0, fontStyle: "bold" },
@@ -615,13 +615,13 @@ function App() {
       columnStyles: {
         0: { cellWidth: 22 },
         1: { cellWidth: 65 },
-        2: { cellWidth: 22, halign: "center" },
+        2: { cellWidth: 22, halign: "right" },
         3: { cellWidth: 30, halign: "right" },
-        4: { cellWidth: 31, halign: "right" }
+        4: { cellWidth: 41, halign: "right" }
       }
     });
     const finalY = doc.lastAutoTable.finalY;
-    const tableWidth = 22 + 65 + 22 + 30 + 31;
+    const tableWidth = 22 + 65 + 22 + 30 + 41;
     doc.setDrawColor(...couleur); doc.setLineWidth(0.5);
     doc.line(15, finalY, 15 + tableWidth, finalY);
     const pageHeight = doc.internal.pageSize.height;
