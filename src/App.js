@@ -602,7 +602,28 @@ function App() {
     doc.setDrawColor(...couleur); doc.setLineWidth(0.5); doc.line(15, 65, 195, 65);
     const formatMontant = (val) => Number(val).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
     const totalGeneral = lignesDetail.reduce((sum, l) => sum + Number(l.montant || 0), 0);
-    autoTable(doc, { startY: 70, head: [["Code", "Designation", "Quantite", "Prix Unitaire", "Montant (MRU)"]], body: lignesDetail.map((l) => [l.code_produit || "-", l.designation || "-", l.quantite, formatMontant(l.prix_unitaire), formatMontant(l.montant)]), foot: [["", "", "", "TOTAL GENERAL :", formatMontant(totalGeneral) + " MRU"]], headStyles: { fillColor: couleur, textColor: 255, fontStyle: "bold" }, footStyles: { fillColor: [240, 240, 240], textColor: 0, fontStyle: "bold" }, alternateRowStyles: { fillColor: [249, 249, 249] }, styles: { fontSize: 10, cellPadding: 4 }, columnStyles: { 0: { cellWidth: 25 }, 1: { cellWidth: 70 }, 2: { cellWidth: 25, halign: "center" }, 3: { cellWidth: 35, halign: "right" }, 4: { cellWidth: 35, halign: "right" } } });
+    autoTable(doc, {
+      startY: 70,
+      margin: { left: 15, right: 15 },
+      head: [["Code", "Designation", "Quantite", "Prix Unitaire", "Montant (MRU)"]],
+      body: lignesDetail.map((l) => [l.code_produit || "-", l.designation || "-", l.quantite, formatMontant(l.prix_unitaire), formatMontant(l.montant)]),
+      foot: [["", "", "", "TOTAL GENERAL :", formatMontant(totalGeneral) + " MRU"]],
+      headStyles: { fillColor: couleur, textColor: 255, fontStyle: "bold" },
+      footStyles: { fillColor: [240, 240, 240], textColor: 0, fontStyle: "bold" },
+      alternateRowStyles: { fillColor: [249, 249, 249] },
+      styles: { fontSize: 10, cellPadding: 4 },
+      columnStyles: {
+        0: { cellWidth: 22 },
+        1: { cellWidth: 65 },
+        2: { cellWidth: 22, halign: "center" },
+        3: { cellWidth: 30, halign: "right" },
+        4: { cellWidth: 31, halign: "right" }
+      }
+    });
+    const finalY = doc.lastAutoTable.finalY;
+    const tableWidth = 22 + 65 + 22 + 30 + 31;
+    doc.setDrawColor(...couleur); doc.setLineWidth(0.5);
+    doc.line(15, finalY, 15 + tableWidth, finalY);
     const pageHeight = doc.internal.pageSize.height;
     doc.setFontSize(9); doc.setTextColor(150, 150, 150);
     doc.text(`Document genere le ${new Date().toLocaleDateString("fr-FR")} a ${new Date().toLocaleTimeString("fr-FR")}`, 105, pageHeight - 10, { align: "center" });
