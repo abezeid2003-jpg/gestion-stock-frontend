@@ -504,24 +504,61 @@ function App() {
   const imprimerMouvementsPDF = () => {
     if (!ficheMouvements) return;
     const { produit, totaux } = ficheMouvements; const tableauLignes = construireTableauMouvements();
-    const doc = new jsPDF({ orientation: "landscape" }); const couleur = [13, 110, 253];
-    doc.setFillColor(...couleur); doc.rect(0, 0, 297, 28, "F");
+    const fmt = (val) => Number(val).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+    const doc = new jsPDF(); const couleur = [13, 110, 253];
+    doc.setFillColor(...couleur); doc.rect(0, 0, 210, 28, "F");
     doc.addImage(logoCAIE, "JPEG", 3, 2, 22, 22);
-    doc.addImage(logoCAIE, "JPEG", 272, 2, 22, 22);
+    doc.addImage(logoCAIE, "JPEG", 185, 2, 22, 22);
     doc.setTextColor(255, 255, 255); doc.setFontSize(14); doc.setFont("helvetica", "bold");
-    doc.text("GESTION DE STOCK", 148, 12, { align: "center" }); doc.setFontSize(11); doc.text("FICHE DE MOUVEMENTS", 148, 22, { align: "center" });
-    doc.setTextColor(0, 0, 0); doc.setFontSize(10); doc.setFont("helvetica", "bold");
-    doc.text(`Code : ${produit.code_produit}`, 15, 35); doc.text(`Designation : ${produit.designation}`, 60, 35); doc.text(`Unite : ${produit.unite}`, 150, 35); doc.text(`Prix Achat : ${produit.prix_achat} MRU`, 185, 35); doc.text(`Prix Vente : ${produit.prix_vente} MRU`, 237, 35);
-    doc.setDrawColor(...couleur); doc.setLineWidth(0.5); doc.line(15, 40, 282, 40);
-    autoTable(doc, { startY: 45, head: [["Date", "N° Bon", "Type", "Fournisseur / Client", "Entree", "Sortie", "Stock"]], body: tableauLignes.map((l) => [l.date, l.numero_bon, l.type, l.tiers, l.entree !== "-" ? l.entree : "", l.sortie !== "-" ? l.sortie : "", l.stock]), foot: [["", "", "", "TOTAUX :", totaux.total_entrees, totaux.total_sorties, totaux.stock_final]], headStyles: { fillColor: couleur, textColor: 255, fontStyle: "bold" }, footStyles: { fillColor: [40, 40, 40], textColor: 255, fontStyle: "bold" }, alternateRowStyles: { fillColor: [249, 249, 249] }, styles: { fontSize: 9, cellPadding: 3 }, columnStyles: { 0: { cellWidth: 25 }, 1: { cellWidth: 25 }, 2: { cellWidth: 25 }, 3: { cellWidth: 90 }, 4: { cellWidth: 25, halign: "center" }, 5: { cellWidth: 25, halign: "center" }, 6: { cellWidth: 25, halign: "center" } }, didParseCell: (data) => { if (data.section === "body") { const type = tableauLignes[data.row.index]?.type; if (type === "Stock Initial") data.cell.styles.fillColor = [217, 237, 247]; else if (type === "Entree") data.cell.styles.fillColor = [212, 237, 218]; else if (type === "Sortie") data.cell.styles.fillColor = [248, 215, 218]; } } });
-    const finalY = doc.lastAutoTable.finalY + 8;
-    doc.setFontSize(10); doc.setFont("helvetica", "bold");
-    doc.setFillColor(23, 162, 184); doc.rect(15, finalY, 55, 12, "F"); doc.setFillColor(25, 135, 84); doc.rect(75, finalY, 55, 12, "F"); doc.setFillColor(220, 53, 69); doc.rect(135, finalY, 55, 12, "F"); doc.setFillColor(13, 110, 253); doc.rect(195, finalY, 55, 12, "F");
+    doc.text("GESTION DE STOCK", 105, 12, { align: "center" }); doc.setFontSize(11); doc.text("FICHE DE MOUVEMENTS", 105, 22, { align: "center" });
+    doc.setTextColor(0, 0, 0); doc.setFontSize(9); doc.setFont("helvetica", "bold");
+    doc.text(`Code : ${produit.code_produit}`, 15, 34);
+    doc.text(`Designation : ${produit.designation}`, 60, 34);
+    doc.text(`Unite : ${produit.unite}`, 155, 34);
+    doc.text(`Prix Vente : ${fmt(produit.prix_vente)} MRU`, 15, 40);
+    doc.setDrawColor(...couleur); doc.setLineWidth(0.5); doc.line(15, 44, 195, 44);
+    autoTable(doc, {
+      startY: 48,
+      head: [["Date", "N° Bon", "Type", "Fourn./Client", "Entree", "Sortie", "Stock"]],
+      body: tableauLignes.map((l) => [
+        l.date,
+        l.numero_bon,
+        l.type,
+        l.tiers,
+        l.entree !== "-" ? fmt(l.entree) : "",
+        l.sortie !== "-" ? fmt(l.sortie) : "",
+        fmt(l.stock)
+      ]),
+      foot: [["", "", "", "TOTAUX :", fmt(totaux.total_entrees), fmt(totaux.total_sorties), fmt(totaux.stock_final)]],
+      headStyles: { fillColor: couleur, textColor: 255, fontStyle: "bold", fontSize: 8 },
+      footStyles: { fillColor: [40, 40, 40], textColor: 255, fontStyle: "bold", fontSize: 8 },
+      alternateRowStyles: { fillColor: [249, 249, 249] },
+      styles: { fontSize: 8, cellPadding: 2 },
+      columnStyles: {
+        0: { cellWidth: 22 },
+        1: { cellWidth: 22 },
+        2: { cellWidth: 22 },
+        3: { cellWidth: 60 },
+        4: { cellWidth: 23, halign: "right" },
+        5: { cellWidth: 23, halign: "right" },
+        6: { cellWidth: 23, halign: "right" }
+      },
+      didParseCell: (data) => { if (data.section === "body") { const type = tableauLignes[data.row.index]?.type; if (type === "Stock Initial") data.cell.styles.fillColor = [217, 237, 247]; else if (type === "Entree") data.cell.styles.fillColor = [212, 237, 218]; else if (type === "Sortie") data.cell.styles.fillColor = [248, 215, 218]; } }
+    });
+    const finalY = doc.lastAutoTable.finalY + 6;
+    doc.setFontSize(9); doc.setFont("helvetica", "bold");
+    doc.setFillColor(23, 162, 184); doc.rect(15, finalY, 42, 10, "F");
+    doc.setFillColor(25, 135, 84); doc.rect(60, finalY, 42, 10, "F");
+    doc.setFillColor(220, 53, 69); doc.rect(105, finalY, 42, 10, "F");
+    doc.setFillColor(13, 110, 253); doc.rect(150, finalY, 45, 10, "F");
     doc.setTextColor(255, 255, 255);
-    doc.text(`Stock Initial: ${totaux.qte_initiale}`, 42, finalY + 8, { align: "center" }); doc.text(`Total Entrees: +${totaux.total_entrees}`, 102, finalY + 8, { align: "center" }); doc.text(`Total Sorties: -${totaux.total_sorties}`, 162, finalY + 8, { align: "center" }); doc.text(`Stock Final: ${totaux.stock_final}`, 222, finalY + 8, { align: "center" });
+    doc.text(`S.I: ${fmt(totaux.qte_initiale)}`, 36, finalY + 7, { align: "center" });
+    doc.text(`Entrees: +${fmt(totaux.total_entrees)}`, 81, finalY + 7, { align: "center" });
+    doc.text(`Sorties: -${fmt(totaux.total_sorties)}`, 126, finalY + 7, { align: "center" });
+    doc.text(`Stock Final: ${fmt(totaux.stock_final)}`, 172, finalY + 7, { align: "center" });
     const pageHeight = doc.internal.pageSize.height;
     doc.setFontSize(8); doc.setTextColor(150, 150, 150); doc.setFont("helvetica", "normal");
-    doc.text(`Document genere le ${new Date().toLocaleDateString("fr-FR")} a ${new Date().toLocaleTimeString("fr-FR")}`, 148, pageHeight - 8, { align: "center" });
+    doc.text(`Document genere le ${new Date().toLocaleDateString("fr-FR")} a ${new Date().toLocaleTimeString("fr-FR")}`, 105, pageHeight - 8, { align: "center" });
     doc.save(`Fiche_Mouvements_${produit.code_produit}_${produit.designation}.pdf`);
   };
 
