@@ -324,6 +324,8 @@ function App() {
       )}
     </div>
   );
+
+  const chargerStats = () => {
     if (!token) return;
     Promise.all([
       fetch(`${API}/produits`, { headers: headers() }).then((r) => r.json()),
