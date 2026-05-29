@@ -234,7 +234,7 @@ function App() {
       const resultats = [];
       for (const id_produit of produitIds) {
         const data = await fetch(`${API}/mouvements/${id_produit}`, { headers: headers() }).then((r) => r.json());
-        const sorties = data.sorties ? data.sorties.filter((s) => String(s.id_client || "") === String(pcClientSelectionne) || data.sorties.some((x) => x.nom_client)) : [];
+        // const sorties = data.sorties ? data.sorties.filter((s) => String(s.id_client || "") === String(pcClientSelectionne) || data.sorties.some((x) => x.nom_client)) : [];
         // Filtrer sorties par client
         const sortiesClient = data.sorties ? data.sorties.filter((s) => {
           const client = clients.find((c) => String(c.id_client) === String(pcClientSelectionne));
