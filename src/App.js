@@ -8,7 +8,7 @@ import {
 } from "recharts";
 
 function App() {
-  const API = "https://gestion-stock-backend-5qm3.onrender.com"; // v2
+  const API = "http://localhost:3001";
 
   // Vérifier si le token JWT est encore valide
   const verifierTokenValide = (tok) => {
@@ -220,7 +220,110 @@ function App() {
     </div>
   );
 
-  const chargerStats = () => {
+  // ETATS PRODUITS-CLIENT
+  const [pcClientSelectionne, setPcClientSelectionne] = useState("");
+  const [pcProduitSelectionne, setPcProduitSelectionne] = useState("");
+  const [pcData, setPcData] = useState(null);
+  const [pcLoading, setPcLoading] = useState(false);
+
+  const chargerProduitsClient = async () => {
+    if (!pcClientSelectionne) { setMessage("Choisissez un client !"); return; }
+    setPcLoading(true); setPcData(null);
+    try {
+      const produitIds = pcProduitSelectionne ? [pcProduitSelectionne] : produits.map((p) => p.id_produit);
+      const resultats = [];
+      for (const id_produit of produitIds) {
+        const data = await fetch(`${API}/mouvements/${id_produit}`, { headers: headers() }).then((r) => r.json());
+        const sorties = data.sorties ? data.sorties.filter((s) => String(s.id_client || "") === String(pcClientSelectionne) || data.sorties.some((x) => x.nom_client)) : [];
+        // Filtrer sorties par client
+        const sortiesClient = data.sorties ? data.sorties.filter((s) => {
+          const client = clients.find((c) => String(c.id_client) === String(pcClientSelectionne));
+          return client && s.nom_client === client.nom;
+        }) : [];
+        const totalSorties = sortiesClient.reduce((sum, s) => sum + Number(s.quantite), 0);
+        if (totalSorties > 0 || !pcProduitSelectionne) {
+          resultats.push({ produit: data.produit, sorties: sortiesClient, total: totalSorties });
+        }
+      }
+      setPcData(resultats);
+    } catch (err) { setMessage("Erreur de chargement !"); }
+    setPcLoading(false);
+  };
+
+  const renderProduitsClient = () => (
+    <div>
+      <h4 className="mb-4">📦 Mouvements Produits par Client</h4>
+      {message && (<div className={`alert ${message.includes("succes") ? "alert-success" : "alert-danger"} alert-dismissible`}>{message}<button className="btn-close" onClick={() => setMessage("")}></button></div>)}
+      <div className="card p-3 mb-3 border-primary">
+        <div className="row g-3 align-items-end">
+          <div className="col-md-4">
+            <label className="form-label fw-bold">Client *</label>
+            <select className="form-select" value={pcClientSelectionne} onChange={(e) => { setPcClientSelectionne(e.target.value); setPcData(null); }}>
+              <option value="">-- Choisir un client --</option>
+              {clients.map((c) => (<option key={c.id_client} value={c.id_client}>{c.code_client} — {c.nom}</option>))}
+            </select>
+          </div>
+          <div className="col-md-4">
+            <label className="form-label fw-bold">Produit</label>
+            <select className="form-select" value={pcProduitSelectionne} onChange={(e) => { setPcProduitSelectionne(e.target.value); setPcData(null); }}>
+              <option value="">-- Tous les produits --</option>
+              {produits.map((p) => (<option key={p.id_produit} value={p.id_produit}>{p.code_produit} — {p.designation}</option>))}
+            </select>
+          </div>
+          <div className="col-md-4">
+            <button className="btn btn-primary w-100" onClick={chargerProduitsClient} disabled={!pcClientSelectionne}>🔍 Afficher</button>
+          </div>
+        </div>
+      </div>
+
+      {pcLoading && (<div className="text-center my-4"><div className="spinner-border text-primary"></div></div>)}
+
+      {pcData && !pcLoading && (
+        <div>
+          {pcData.length === 0 ? (
+            <div className="alert alert-info">Aucun mouvement trouvé pour ce client.</div>
+          ) : (
+            pcData.map((item, i) => (
+              <div key={i} className="card mb-3">
+                <div className="card-header bg-primary text-white d-flex justify-content-between">
+                  <span><strong>{item.produit.code_produit}</strong> — {item.produit.designation} ({item.produit.unite})</span>
+                  <span>Total Sorti : <strong>{Number(item.total).toLocaleString("fr-FR")}</strong></span>
+                </div>
+                {item.sorties.length > 0 ? (
+                  <table className="table table-bordered table-sm mb-0">
+                    <thead className="table-dark">
+                      <tr><th>Date</th><th>N° Bon</th><th className="text-end">Quantité</th><th className="text-end">Prix Unitaire</th><th className="text-end">Montant (MRU)</th></tr>
+                    </thead>
+                    <tbody>
+                      {item.sorties.map((s, j) => (
+                        <tr key={j}>
+                          <td>{s.date_bon ? s.date_bon.substring(0, 10).split("-").reverse().join("/") : "-"}</td>
+                          <td>{s.numero_bon}</td>
+                          <td className="text-end">{Number(s.quantite).toLocaleString("fr-FR")}</td>
+                          <td className="text-end">{Number(s.prix_unitaire).toLocaleString("fr-FR")}</td>
+                          <td className="text-end fw-bold">{Number(s.montant).toLocaleString("fr-FR")}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot className="table-secondary fw-bold">
+                      <tr>
+                        <td colSpan="2" className="text-end">TOTAL :</td>
+                        <td className="text-end">{Number(item.total).toLocaleString("fr-FR")}</td>
+                        <td></td>
+                        <td className="text-end">{item.sorties.reduce((sum, s) => sum + Number(s.montant || 0), 0).toLocaleString("fr-FR")} MRU</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                ) : (
+                  <div className="p-3 text-muted">Aucune sortie pour ce produit.</div>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
     if (!token) return;
     Promise.all([
       fetch(`${API}/produits`, { headers: headers() }).then((r) => r.json()),
@@ -238,7 +341,7 @@ function App() {
 
   useEffect(() => {
     if (!token) return;
-    if (["bon-entree", "bon-sortie", "mouvements", "fiche-stock", "stock-initial", "utilisateurs", "situation-financiere", "versements"].includes(page)) return;
+    if (["bon-entree", "bon-sortie", "mouvements", "fiche-stock", "stock-initial", "utilisateurs", "situation-financiere", "versements", "produits-client"].includes(page)) return;
     setLoading(true); setDonnees([]); setRecherche(""); setShowForm(false); setMessage(""); setBonDetail(null); setShowEditBon(false);
     const url = page === "liste-entree" ? `${API}/bons-entree` : page === "liste-sortie" ? `${API}/bons-sortie` : `${API}/${page}`;
     fetch(url, { headers: headers() }).then((res) => res.json()).then((data) => { setDonnees(data); setLoading(false); }).catch(() => setLoading(false));
@@ -253,7 +356,16 @@ function App() {
   const resetBon = () => { setBon({ numero_bon: "", date_bon: "", id_fournisseur: "", id_client: "", observation: "" }); setLignes([{ id_produit: "", quantite: "", prix_unitaire: "" }]); setMessage(""); setSaisieDate(""); setSaisieEditionDate(""); };
   const ajouterLigne = () => setLignes([...lignes, { id_produit: "", quantite: "", prix_unitaire: "" }]);
   const supprimerLigne = (index) => setLignes(lignes.filter((_, i) => i !== index));
-  const modifierLigne = (index, champ, valeur) => { const newLignes = [...lignes]; newLignes[index][champ] = valeur; setLignes(newLignes); };
+  const modifierLigne = (index, champ, valeur) => {
+    const newLignes = [...lignes];
+    newLignes[index][champ] = valeur;
+    // Remplir automatiquement le prix de vente quand un produit est sélectionné dans bon de sortie
+    if (champ === "id_produit" && page === "bon-sortie") {
+      const produit = produits.find((p) => String(p.id_produit) === String(valeur));
+      if (produit) newLignes[index].prix_unitaire = produit.prix_vente;
+    }
+    setLignes(newLignes);
+  };
   const ajouterLigneEdition = () => setLignesEdition([...lignesEdition, { id_produit: "", quantite: "", prix_unitaire: "" }]);
   const supprimerLigneEdition = (index) => setLignesEdition(lignesEdition.filter((_, i) => i !== index));
   const modifierLigneEdition = (index, champ, valeur) => { const newLignes = [...lignesEdition]; newLignes[index][champ] = valeur; setLignesEdition(newLignes); };
@@ -1319,7 +1431,7 @@ function App() {
 
   const colonnes = { stock: ["code_produit", "designation", "unite", "stock_initial", "total_entree", "total_sortie", "stock_actuel"], produits: ["code_produit", "designation", "unite", "prix_achat", "prix_vente", "stock_minimum"], clients: ["code_client", "nom", "telephone", "adresse"], fournisseurs: ["code_fournisseur", "nom", "telephone", "adresse"], "liste-entree": ["numero_bon", "date_bon", "nom_fournisseur", "observation"], "liste-sortie": ["numero_bon", "date_bon", "nom_client", "observation"] };
   const idCols = { produits: "id_produit", clients: "id_client", fournisseurs: "id_fournisseur" };
-  const titres = { stock: "Stock Actuel", produits: "Produits", clients: "Clients", fournisseurs: "Fournisseurs", "bon-entree": "Nouveau Bon d'Entree", "bon-sortie": "Nouveau Bon de Sortie", "liste-entree": "Liste des Bons d'Entree", "liste-sortie": "Liste des Bons de Sortie", "graphiques": "Graphiques", "mouvements": "Fiche Mouvements", "fiche-stock": "Fiche de Stock", "stock-initial": "Stock Initial", "situation-financiere": "Situation Financiere Client", "versements": "Versements Clients", ...(isAdmin ? { "utilisateurs": "Utilisateurs" } : {}) };
+  const titres = { stock: "Stock Actuel", produits: "Produits", clients: "Clients", fournisseurs: "Fournisseurs", "bon-entree": "Nouveau Bon d'Entree", "bon-sortie": "Nouveau Bon de Sortie", "liste-entree": "Liste des Bons d'Entree", "liste-sortie": "Liste des Bons de Sortie", "graphiques": "Graphiques", "mouvements": "Fiche Mouvements", "fiche-stock": "Fiche de Stock", "stock-initial": "Stock Initial", "situation-financiere": "Situation Financiere Client", "versements": "Versements Clients", "produits-client": "Produits par Client", ...(isAdmin ? { "utilisateurs": "Utilisateurs" } : {}) };
   const donneesFiltrees = donnees.filter((d) => Object.values(d).some((v) => String(v).toLowerCase().includes(recherche.toLowerCase())));
 
   const renderFormAjout = () => {
@@ -1465,7 +1577,7 @@ function App() {
           {Object.keys(titres).map((p) => (
             <button key={p} onClick={() => { setPage(p); resetBon(); setBonDetail(null); setShowEditBon(false); setFicheMouvements(null); setProduitSelectionne(""); setFicheStockData(null); setStockInitialEnEdition(null); }}
               className={`btn me-2 mb-2 ${page === p ? "btn-primary" : "btn-secondary"}`}>
-              {p === "graphiques" ? "📊 " : p === "mouvements" ? "📋 " : p === "fiche-stock" ? "📊 " : p === "stock-initial" ? "📦 " : p === "utilisateurs" ? "👥 " : p === "situation-financiere" ? "💰 " : p === "versements" ? "💳 " : ""}{titres[p]}
+              {p === "graphiques" ? "📊 " : p === "mouvements" ? "📋 " : p === "fiche-stock" ? "📊 " : p === "stock-initial" ? "📦 " : p === "utilisateurs" ? "👥 " : p === "situation-financiere" ? "💰 " : p === "versements" ? "💳 " : p === "produits-client" ? "🔎 " : ""}{titres[p]}
             </button>
           ))}
         </div>
@@ -1476,6 +1588,7 @@ function App() {
           : page === "stock-initial" ? renderStockInitial()
           : page === "situation-financiere" ? renderSituationFinanciere()
           : page === "versements" ? renderVersements()
+          : page === "produits-client" ? renderProduitsClient()
           : page === "utilisateurs" && isAdmin ? renderUtilisateurs()
           : page === "bon-entree" ? renderFormulaireBon("bon-entree")
           : page === "bon-sortie" ? renderFormulaireBon("bon-sortie")
