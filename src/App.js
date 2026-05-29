@@ -10,8 +10,25 @@ import {
 function App() {
   const API = "https://gestion-stock-backend-5qm3.onrender.com"; // v2
 
-  const [token, setToken] = useState(localStorage.getItem("token") || null);
-  const [utilisateur, setUtilisateur] = useState(JSON.parse(localStorage.getItem("utilisateur") || "null"));
+  // Vérifier si le token JWT est encore valide
+  const verifierTokenValide = (tok) => {
+    if (!tok) return false;
+    try {
+      const payload = JSON.parse(atob(tok.split('.')[1]));
+      return payload.exp * 1000 > Date.now();
+    } catch (e) { return false; }
+  };
+
+  // Vider localStorage si token expiré
+  const tokenStocke = localStorage.getItem("token");
+  const utilisateurStocke = localStorage.getItem("utilisateur");
+  if (tokenStocke && !verifierTokenValide(tokenStocke)) {
+    localStorage.removeItem("token");
+    localStorage.removeItem("utilisateur");
+  }
+
+  const [token, setToken] = useState(verifierTokenValide(tokenStocke) ? tokenStocke : null);
+  const [utilisateur, setUtilisateur] = useState(verifierTokenValide(tokenStocke) ? JSON.parse(utilisateurStocke || "null") : null);
   const [loginForm, setLoginForm] = useState({ login: "", mot_de_passe: "" });
   const [loginErreur, setLoginErreur] = useState("");
   const [loadingLogin, setLoadingLogin] = useState(false);
