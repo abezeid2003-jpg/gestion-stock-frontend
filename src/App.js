@@ -8,7 +8,7 @@ import {
 } from "recharts";
 
 function App() {
-  const API = "http://localhost:3001";
+  const API = "https://gestion-stock-backend-5qm3.onrender.com";
 
   // Vérifier si le token JWT est encore valide
   const verifierTokenValide = (tok) => {
