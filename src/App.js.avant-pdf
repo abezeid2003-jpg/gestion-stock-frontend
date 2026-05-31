@@ -634,7 +634,7 @@ function App() {
     const pageHeight = doc.internal.pageSize.height;
     doc.setFontSize(9); doc.setTextColor(150, 150, 150);
     doc.text(`Document genere le ${new Date().toLocaleDateString("fr-FR")} a ${new Date().toLocaleTimeString("fr-FR")}`, 105, pageHeight - 10, { align: "center" });
-    doc.output("dataurlnewwindow");
+    doc.save(`Fiche_Stock_${ficheStockData.dateDebut}_${ficheStockData.dateFin}.pdf`);
   };
 
   const construireTableauMouvements = () => {
@@ -715,7 +715,7 @@ function App() {
     const pageHeight = doc.internal.pageSize.height;
     doc.setFontSize(8); doc.setTextColor(150, 150, 150); doc.setFont("helvetica", "normal");
     doc.text(`Document genere le ${new Date().toLocaleDateString("fr-FR")} a ${new Date().toLocaleTimeString("fr-FR")}`, 105, pageHeight - 8, { align: "center" });
-    doc.output("dataurlnewwindow");
+    doc.save(`Fiche_Mouvements_${produit.code_produit}_${produit.designation}.pdf`);
   };
 
   const imprimerBonPDF = (type) => {
@@ -758,7 +758,7 @@ function App() {
     const pageHeight = doc.internal.pageSize.height;
     doc.setFontSize(9); doc.setTextColor(150, 150, 150);
     doc.text(`Document genere le ${new Date().toLocaleDateString("fr-FR")} a ${new Date().toLocaleTimeString("fr-FR")}`, 105, pageHeight - 10, { align: "center" });
-    doc.output("dataurlnewwindow");
+    doc.save(`${titre.replace(" ", "_")}_${bonDetail.numero_bon}.pdf`);
   };
 
   const renderLogin = () => (
@@ -1120,7 +1120,7 @@ function App() {
     const pageHeight = doc.internal.pageSize.height;
     doc.setFontSize(8); doc.setTextColor(150, 150, 150); doc.setFont("helvetica", "normal");
     doc.text(`Document genere le ${new Date().toLocaleDateString("fr-FR")} a ${new Date().toLocaleTimeString("fr-FR")}`, 148, pageHeight - 8, { align: "center" });
-    doc.output("dataurlnewwindow");
+    doc.save(`Situation_Financiere_${client.code_client}_${date_inventaire}.pdf`);
   };
 
   const renderSituationFinanciere = () => (
