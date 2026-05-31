@@ -74,8 +74,6 @@ function App() {
   const [stockData, setStockData] = useState([]);
   const [showAlertes, setShowAlertes] = useState(false);
   const [produitSelectionne, setProduitSelectionne] = useState("");
-  const [fmDateDebut, setFmDateDebut] = useState("");
-  const [fmDateFin, setFmDateFin] = useState("");
   const [ficheMouvements, setFicheMouvements] = useState(null);
   const [loadingMouvements, setLoadingMouvements] = useState(false);
   const [ficheStockDateDebut, setFicheStockDateDebut] = useState("");
@@ -652,10 +650,9 @@ function App() {
     const mouvements = [...entrees.map((e) => ({ ...e, _type: "entree" })), ...sorties.map((s) => ({ ...s, _type: "sortie" }))].sort((a, b) => new Date(a.date_bon) - new Date(b.date_bon));
     let stockCourant = Number(stock_initial.quantite) || 0;
     mouvements.forEach((m) => {
-      if (m._type === "entree") { stockCourant += Number(m.quantite); lignesMouvements.push({ date: formatDateFR(m.date_bon.substring(0, 10)), numero_bon: m.numero_bon, _dateISO: m.date_bon.substring(0, 10), type: "Entree", tiers: m.nom_fournisseur, entree: Number(m.quantite), sortie: "-", stock: stockCourant, _classe: "table-success" }); }
-      else { stockCourant -= Number(m.quantite); lignesMouvements.push({ date: formatDateFR(m.date_bon.substring(0, 10)), numero_bon: m.numero_bon, _dateISO: m.date_bon.substring(0, 10), type: "Sortie", tiers: m.nom_client, entree: "-", sortie: Number(m.quantite), stock: stockCourant, _classe: "table-danger" }); }
+      if (m._type === "entree") { stockCourant += Number(m.quantite); lignesMouvements.push({ date: formatDateFR(m.date_bon.substring(0, 10)), numero_bon: m.numero_bon, type: "Entree", tiers: m.nom_fournisseur, entree: Number(m.quantite), sortie: "-", stock: stockCourant, _classe: "table-success" }); }
+      else { stockCourant -= Number(m.quantite); lignesMouvements.push({ date: formatDateFR(m.date_bon.substring(0, 10)), numero_bon: m.numero_bon, type: "Sortie", tiers: m.nom_client, entree: "-", sortie: Number(m.quantite), stock: stockCourant, _classe: "table-danger" }); }
     });
-    if (fmDateDebut || fmDateFin) { lignesMouvements = lignesMouvements.filter((l) => { const d = l._dateISO || ""; if (fmDateDebut && d < fmDateDebut) return false; if (fmDateFin && d > fmDateFin) return false; return true; }); }
     return lignesMouvements;
   };
 
@@ -906,8 +903,8 @@ function App() {
       <h4 className="mb-4">📋 Fiche de Mouvements</h4>
       <div className="card p-3 mb-4">
         <div className="row g-2 align-items-end">
-          <div className="col-md-4"><label className="form-label fw-bold">Choisir un Produit</label><select className="form-select" value={produitSelectionne} onChange={(e) => { setProduitSelectionne(e.target.value); setFicheMouvements(null); }}><option value="">-- Selectionner un produit --</option>{produits.map((p) => (<option key={p.id_produit} value={p.id_produit}>{p.code_produit} — {p.designation}</option>))}</select></div>
-          <div className="col-md-2"><label className="form-label fw-bold">Date debut</label><input type="date" className="form-control" value={fmDateDebut} onChange={(e) => setFmDateDebut(e.target.value)} /></div><div className="col-md-2"><label className="form-label fw-bold">Date fin</label><input type="date" className="form-control" value={fmDateFin} onChange={(e) => setFmDateFin(e.target.value)} /></div><div className="col-md-3"><button className="btn btn-primary w-100" onClick={chargerMouvements} disabled={!produitSelectionne}>🔍 Afficher les Mouvements</button></div>
+          <div className="col-md-6"><label className="form-label fw-bold">Choisir un Produit</label><select className="form-select" value={produitSelectionne} onChange={(e) => { setProduitSelectionne(e.target.value); setFicheMouvements(null); }}><option value="">-- Selectionner un produit --</option>{produits.map((p) => (<option key={p.id_produit} value={p.id_produit}>{p.code_produit} — {p.designation}</option>))}</select></div>
+          <div className="col-md-3"><button className="btn btn-primary w-100" onClick={chargerMouvements} disabled={!produitSelectionne}>🔍 Afficher les Mouvements</button></div>
         </div>
       </div>
       {loadingMouvements && (<div className="text-center my-4"><div className="spinner-border text-primary"></div></div>)}
@@ -1638,12 +1635,6 @@ function App() {
 }
 
 export default App;
-
-
-
-
-
-
 
 
 
