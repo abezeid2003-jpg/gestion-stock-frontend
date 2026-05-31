@@ -223,8 +223,6 @@ function App() {
   // ETATS PRODUITS-CLIENT
   const [pcClientSelectionne, setPcClientSelectionne] = useState("");
   const [pcProduitSelectionne, setPcProduitSelectionne] = useState("");
-  const [pcDateDebut, setPcDateDebut] = useState("");
-  const [pcDateFin, setPcDateFin] = useState("");
   const [pcData, setPcData] = useState(null);
   const [pcLoading, setPcLoading] = useState(false);
 
@@ -240,14 +238,10 @@ function App() {
         // Filtrer sorties par client
         const sortiesClient = data.sorties ? data.sorties.filter((s) => {
           const client = clients.find((c) => String(c.id_client) === String(pcClientSelectionne));
-          if (!client || s.nom_client !== client.nom) return false;
-          const d = s.date_bon ? s.date_bon.substring(0, 10) : "";
-          if (pcDateDebut && d < pcDateDebut) return false;
-          if (pcDateFin && d > pcDateFin) return false;
-          return true;
+          return client && s.nom_client === client.nom;
         }) : [];
         const totalSorties = sortiesClient.reduce((sum, s) => sum + Number(s.quantite), 0);
-        if (totalSorties > 0) {
+        if (totalSorties > 0 || !pcProduitSelectionne) {
           resultats.push({ produit: data.produit, sorties: sortiesClient, total: totalSorties });
         }
       }
@@ -262,19 +256,22 @@ function App() {
       {message && (<div className={`alert ${message.includes("succes") ? "alert-success" : "alert-danger"} alert-dismissible`}>{message}<button className="btn-close" onClick={() => setMessage("")}></button></div>)}
       <div className="card p-3 mb-3 border-primary">
         <div className="row g-3 align-items-end">
-          <div className="col-md-3"><label className="form-label fw-bold">Client *</label>
+          <div className="col-md-4">
+            <label className="form-label fw-bold">Client *</label>
             <select className="form-select" value={pcClientSelectionne} onChange={(e) => { setPcClientSelectionne(e.target.value); setPcData(null); }}>
               <option value="">-- Choisir un client --</option>
               {clients.map((c) => (<option key={c.id_client} value={c.id_client}>{c.code_client} — {c.nom}</option>))}
             </select>
           </div>
-          <div className="col-md-3"><label className="form-label fw-bold">Produit</label>
+          <div className="col-md-4">
+            <label className="form-label fw-bold">Produit</label>
             <select className="form-select" value={pcProduitSelectionne} onChange={(e) => { setPcProduitSelectionne(e.target.value); setPcData(null); }}>
               <option value="">-- Tous les produits --</option>
               {produits.map((p) => (<option key={p.id_produit} value={p.id_produit}>{p.code_produit} — {p.designation}</option>))}
             </select>
           </div>
-          <div className="col-md-2"><label className="form-label fw-bold">Date debut</label><input type="date" className="form-control" value={pcDateDebut} onChange={(e) => { setPcDateDebut(e.target.value); setPcData(null); }} /></div><div className="col-md-2"><label className="form-label fw-bold">Date fin</label><input type="date" className="form-control" value={pcDateFin} onChange={(e) => { setPcDateFin(e.target.value); setPcData(null); }} /></div><div className="col-md-2"><button className="btn btn-primary w-100" onClick={chargerProduitsClient} disabled={!pcClientSelectionne}>🔍 Afficher</button>
+          <div className="col-md-4">
+            <button className="btn btn-primary w-100" onClick={chargerProduitsClient} disabled={!pcClientSelectionne}>🔍 Afficher</button>
           </div>
         </div>
       </div>
@@ -1635,9 +1632,3 @@ function App() {
 }
 
 export default App;
-
-
-
-
-
-
