@@ -188,7 +188,7 @@ function App() {
         <div className="card p-3 mb-3 border-success">
           <h5 className="mb-3 text-success">Nouveau Versement</h5>
           <div className="row g-2">
-            <div className="col-md-3"><label className="form-label">Client *</label><select className="form-select" value={nouveauVersement.id_client} onChange={(e) => setNouveauVersement({ ...nouveauVersement, id_client: e.target.value })}><option value="">-- Choisir --</option>{clients.map((c) => (<option key={c.id_client} value={c.id_client}>{c.code_client} — {c.nom}</option>))}</select></div>
+            <div className="col-md-3"><label className="form-label">Client *</label><select className="form-select" value={nouveauVersement.id_client} onChange={(e) => setNouveauVersement({ ...nouveauVersement, id_client: e.target.value })}><option value="">-- Choisir --</option>{clients.map((c) => (<option key={c.id_client} value={c.id_client}>{c.code_client} - {c.nom}</option>))}</select></div>
             <div className="col-md-2"><label className="form-label">Date * (jj/mm/aaaa)</label><input type="text" className={`form-control ${nouveauVersementDate && !dateValide(nouveauVersementDate) ? "is-invalid" : nouveauVersementDate && dateValide(nouveauVersementDate) ? "is-valid" : ""}`} placeholder="jj/mm/aaaa" maxLength={10} value={nouveauVersementDate} onChange={(e) => setNouveauVersementDate(e.target.value)} /></div>
             <div className="col-md-2"><label className="form-label">Montant (MRU) *</label><input type="number" min="0" className="form-control" value={nouveauVersement.montant} onChange={(e) => setNouveauVersement({ ...nouveauVersement, montant: e.target.value })} /></div>
             <div className="col-md-2"><label className="form-label">Mode Paiement</label><select className="form-select" value={nouveauVersement.mode_paiement} onChange={(e) => setNouveauVersement({ ...nouveauVersement, mode_paiement: e.target.value })}><option value="">-- Choisir --</option><option value="Especes">Espèces</option><option value="Cheque">Chèque</option><option value="Virement">Virement</option><option value="Autre">Autre</option></select></div>
@@ -202,7 +202,7 @@ function App() {
         <div className="row g-3 align-items-end">
           <div className="col-md-3"><label className="form-label fw-bold">Date Début (jj/mm/aaaa)</label><input type="text" className={`form-control ${versementsDateDebut && !dateValide(versementsDateDebut) ? "is-invalid" : versementsDateDebut && dateValide(versementsDateDebut) ? "is-valid" : ""}`} placeholder="jj/mm/aaaa" maxLength={10} value={versementsDateDebut} onChange={(e) => setVersementsDateDebut(e.target.value)} />{versementsDateDebut && !dateValide(versementsDateDebut) && <div className="invalid-feedback">Date invalide</div>}</div>
           <div className="col-md-3"><label className="form-label fw-bold">Date Fin (jj/mm/aaaa)</label><input type="text" className={`form-control ${versementsDateFin && !dateValide(versementsDateFin) ? "is-invalid" : versementsDateFin && dateValide(versementsDateFin) ? "is-valid" : ""}`} placeholder="jj/mm/aaaa" maxLength={10} value={versementsDateFin} onChange={(e) => setVersementsDateFin(e.target.value)} />{versementsDateFin && !dateValide(versementsDateFin) && <div className="invalid-feedback">Date invalide</div>}</div>
-          <div className="col-md-3"><label className="form-label fw-bold">Client</label><select className="form-select" value={versementsClientFiltre} onChange={(e) => setVersementsClientFiltre(e.target.value)}><option value="">-- Tous les clients --</option>{clients.map((c) => (<option key={c.id_client} value={c.id_client}>{c.code_client} � {c.nom}</option>))}</select></div><div className="col-md-3"><button className="btn btn-primary w-100" onClick={chargerVersementsListe}>🔍 Afficher</button></div>
+          <div className="col-md-3"><label className="form-label fw-bold">Client</label><select className="form-select" value={versementsClientFiltre} onChange={(e) => setVersementsClientFiltre(e.target.value)}><option value="">-- Tous les clients --</option>{clients.map((c) => (<option key={c.id_client} value={c.id_client}>{c.code_client} - {c.nom}</option>))}</select></div><div className="col-md-3"><button className="btn btn-primary w-100" onClick={chargerVersementsListe}>🔍 Afficher</button></div>
         </div>
       </div>
       {versementsLoading && (<div className="text-center my-4"><div className="spinner-border text-primary"></div></div>)}
@@ -281,7 +281,7 @@ function App() {
           <div className="col-md-3"><label className="form-label fw-bold">Client *</label>
             <select className="form-select" value={pcClientSelectionne} onChange={(e) => { setPcClientSelectionne(e.target.value); setPcData(null); }}>
               <option value="">-- Choisir un client --</option>
-              {clients.map((c) => (<option key={c.id_client} value={c.id_client}>{c.code_client} — {c.nom}</option>))}
+              {clients.map((c) => (<option key={c.id_client} value={c.id_client}>{c.code_client} - {c.nom}</option>))}
             </select>
           </div>
           <div className="col-md-3"><label className="form-label fw-bold">Produit</label>
@@ -1155,7 +1155,7 @@ function App() {
             <label className="form-label fw-bold">Client</label>
             <select className="form-select" value={sfClientSelectionne} onChange={(e) => { setSfClientSelectionne(e.target.value); setSfSituationData(null); setSfEtape(1); }}>
               <option value="">-- Choisir un client --</option>
-              {clients.map((c) => (<option key={c.id_client} value={c.id_client}>{c.code_client} — {c.nom}</option>))}
+              {clients.map((c) => (<option key={c.id_client} value={c.id_client}>{c.code_client} - {c.nom}</option>))}
             </select>
           </div>
           <div className="col-md-3">
