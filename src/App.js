@@ -219,7 +219,7 @@ function App() {
                   <td>{v.reference || "-"}</td>
                   <td className="text-end fw-bold text-success">{Number(v.montant).toLocaleString("fr-FR")}</td>
                   <td>{v.observation || "-"}</td>
-                  {isAdmin && <td className="text-center"><button className="btn btn-warning btn-sm me-1" onClick={() => { setVersementEdit(v); setVersementEditDate(formatDateFR(v.date_versement?.substring(0, 10))); }}>??</button><button className="btn btn-danger btn-sm" onClick={() => supprimerVersementListe(v.id_versement)}>🗑️</button></td>}
+                  {isAdmin && <td className="text-center"><button className="btn btn-warning btn-sm me-1" onClick={() => { setVersementEdit(v); setVersementEditDate(formatDateFR(v.date_versement?.substring(0, 10))); }}>Modifier</button><button className="btn btn-danger btn-sm" onClick={() => supprimerVersementListe(v.id_versement)}>🗑️</button></td>}
                 </tr>
               ))}
             </tbody>
@@ -1652,6 +1652,8 @@ function App() {
 }
 
 export default App;
+
+
 
 
 
