@@ -271,6 +271,52 @@ function App() {
     } catch (err) { setMessage("Erreur de chargement !"); }
     setPcLoading(false);
   };
+const imprimerProduitsClientPDF = () => {
+    if (!pcData || pcData.length === 0) return;
+    const fmt = (val) => Number(val).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+    const clientObj = clients.find((c) => String(c.id_client) === String(pcClientSelectionne));
+    const nomClient = clientObj ? `${clientObj.code_client} - ${clientObj.nom}` : "";
+    const periode = (pcDateDebut || pcDateFin) ? `Periode : ${pcDateDebut || "..."} a ${pcDateFin || "..."}` : "Toutes periodes";
+    const doc = new jsPDF(); const couleur = [13, 110, 253];
+    doc.setFillColor(...couleur); doc.rect(0, 0, 210, 28, "F");
+    doc.addImage(logoCAIE, "JPEG", 3, 2, 22, 22);
+    doc.addImage(logoCAIE, "JPEG", 185, 2, 22, 22);
+    doc.setTextColor(255, 255, 255); doc.setFontSize(14); doc.setFont("helvetica", "bold");
+    doc.text("GESTION DE STOCK", 105, 12, { align: "center" }); doc.setFontSize(11); doc.text("PRODUITS PAR CLIENT", 105, 22, { align: "center" });
+    doc.setTextColor(0, 0, 0); doc.setFontSize(9); doc.setFont("helvetica", "bold");
+    doc.text(`Client : ${nomClient}`, 15, 34);
+    doc.text(periode, 15, 40);
+    doc.setDrawColor(...couleur); doc.setLineWidth(0.5); doc.line(15, 44, 195, 44);
+    let posY = 48;
+    pcData.forEach((item) => {
+      doc.setFontSize(9); doc.setFont("helvetica", "bold"); doc.setTextColor(...couleur);
+      doc.text(`${item.produit.code_produit} - ${item.produit.designation} (${item.produit.unite})   |   Total Sorti : ${fmt(item.total)}`, 15, posY);
+      autoTable(doc, {
+        startY: posY + 3,
+        margin: { left: 15, right: 15 },
+        head: [["Date", "N Bon", "Quantite", "Prix Unitaire", "Montant (MRU)"]],
+        body: item.sorties.map((s) => [
+          s.date_bon ? formatDateFR(s.date_bon.substring(0, 10)) : "-",
+          s.numero_bon,
+          fmt(s.quantite),
+          fmt(s.prix_unitaire),
+          fmt(Number(s.quantite) * Number(s.prix_unitaire))
+        ]),
+        headStyles: { fillColor: couleur, textColor: 255, fontStyle: "bold", fontSize: 8 },
+        alternateRowStyles: { fillColor: [249, 249, 249] },
+        styles: { fontSize: 8, cellPadding: 2 },
+        columnStyles: {
+          0: { cellWidth: 30 },
+          1: { cellWidth: 30 },
+          2: { cellWidth: 35, halign: "right" },
+          3: { cellWidth: 40, halign: "right" },
+          4: { cellWidth: 45, halign: "right" }
+        }
+      });
+      posY = doc.lastAutoTable.finalY + 10;
+    });
+    doc.output("dataurlnewwindow");
+  };
 
   const renderProduitsClient = () => (
     <div>
@@ -299,6 +345,7 @@ function App() {
 
       {pcData && !pcLoading && (
         <div>
+          {pcData.length > 0 && <div className="text-end mb-3"><button className="btn btn-success" onClick={imprimerProduitsClientPDF}>Imprimer PDF</button></div>}
           {pcData.length === 0 ? (
             <div className="alert alert-info">Aucun mouvement trouvé pour ce client.</div>
           ) : (
@@ -1652,6 +1699,8 @@ function App() {
 }
 
 export default App;
+
+
 
 
 
