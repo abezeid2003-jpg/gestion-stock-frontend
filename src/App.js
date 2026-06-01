@@ -167,6 +167,51 @@ function App() {
       else { setMessage("Erreur lors de la modification !"); }
     } catch (err) { setMessage("Erreur de connexion !"); }
   };
+const imprimerVersementsPDF = () => {
+    if (!versementsListe || versementsListe.length === 0) return;
+    const fmt = (val) => Number(val).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+    const clientObj = clients.find((c) => String(c.id_client) === String(versementsClientFiltre));
+    const nomClient = versementsClientFiltre && clientObj ? `${clientObj.code_client} - ${clientObj.nom}` : "Tous les clients";
+    const periode = `Periode : ${versementsDateDebut || "..."} a ${versementsDateFin || "..."}`;
+    const total = versementsListe.reduce((sum, v) => sum + Number(v.montant), 0);
+    const doc = new jsPDF(); const couleur = [13, 110, 253];
+    doc.setFillColor(...couleur); doc.rect(0, 0, 210, 28, "F");
+    doc.addImage(logoCAIE, "JPEG", 3, 2, 22, 22);
+    doc.addImage(logoCAIE, "JPEG", 185, 2, 22, 22);
+    doc.setTextColor(255, 255, 255); doc.setFontSize(14); doc.setFont("helvetica", "bold");
+    doc.text("GESTION DE STOCK", 105, 12, { align: "center" }); doc.setFontSize(11); doc.text("VERSEMENTS CLIENTS", 105, 22, { align: "center" });
+    doc.setTextColor(0, 0, 0); doc.setFontSize(9); doc.setFont("helvetica", "bold");
+    doc.text(`Client : ${nomClient}`, 15, 34);
+    doc.text(periode, 15, 40);
+    doc.setDrawColor(...couleur); doc.setLineWidth(0.5); doc.line(15, 44, 195, 44);
+    autoTable(doc, {
+      startY: 48,
+      margin: { left: 15, right: 15 },
+      head: [["Date", "Client", "Mode", "Reference", "Montant (MRU)", "Observation"]],
+      body: versementsListe.map((v) => [
+        v.date_versement ? formatDateFR(v.date_versement.substring(0, 10)) : "-",
+        `${v.code_client} - ${v.nom_client}`,
+        v.mode_paiement || "-",
+        v.reference || "-",
+        fmt(v.montant),
+        v.observation || "-"
+      ]),
+      foot: [["", "", "", "TOTAL :", fmt(total), ""]],
+      headStyles: { fillColor: couleur, textColor: 255, fontStyle: "bold", fontSize: 8 },
+      footStyles: { fillColor: [40, 40, 40], textColor: 255, fontStyle: "bold", fontSize: 8 },
+      alternateRowStyles: { fillColor: [249, 249, 249] },
+      styles: { fontSize: 8, cellPadding: 2 },
+      columnStyles: {
+        0: { cellWidth: 22 },
+        1: { cellWidth: 48 },
+        2: { cellWidth: 22 },
+        3: { cellWidth: 28 },
+        4: { cellWidth: 30, halign: "right" },
+        5: { cellWidth: 30 }
+      }
+    });
+    doc.output("dataurlnewwindow");
+  };
   const supprimerVersementListe = async (id) => {
     if (!window.confirm("Confirmer la suppression ?")) return;
     try {
@@ -208,6 +253,7 @@ function App() {
       {versementsLoading && (<div className="text-center my-4"><div className="spinner-border text-primary"></div></div>)}
       {versementsListe.length > 0 && !versementsLoading && (
         <div className="card p-0">
+          <div className="text-end p-2"><button className="btn btn-success" onClick={imprimerVersementsPDF}>Imprimer PDF</button></div>
           <table className="table table-bordered table-hover mb-0">
             <thead className="table-dark"><tr><th>Date</th><th>Client</th><th>Mode</th><th>Référence</th><th className="text-end">Montant (MRU)</th><th>Observation</th>{isAdmin && <th className="text-center">Action</th>}</tr></thead>
             <tbody>
@@ -889,6 +935,7 @@ const imprimerProduitsClientPDF = () => {
       {message && (<div className={`alert ${message.includes("succes") ? "alert-success" : "alert-danger"} alert-dismissible`}>{message}<button className="btn-close" onClick={() => setMessage("")}></button></div>)}
       {loadingStockInitial ? (<div className="text-center my-4"><div className="spinner-border text-primary"></div></div>) : (
         <div className="card p-0">
+          <div className="text-end p-2"><button className="btn btn-success" onClick={imprimerVersementsPDF}>Imprimer PDF</button></div>
           <table className="table table-bordered table-hover mb-0">
             <thead className="table-dark">
               <tr><th>Code</th><th>Designation</th><th>Unite</th><th className="text-center">Quantite Initiale</th><th className="text-center">Prix Unitaire (MRU)</th><th className="text-center">Date Saisie (jj/mm/aaaa)</th><th className="text-center">Action</th></tr>
@@ -1699,6 +1746,9 @@ const imprimerProduitsClientPDF = () => {
 }
 
 export default App;
+
+
+
 
 
 
