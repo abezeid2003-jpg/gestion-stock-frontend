@@ -364,6 +364,126 @@ const imprimerProduitsClientPDF = () => {
     doc.output("dataurlnewwindow");
   };
 
+// ETATS CUMUL DES SORTIES
+  const [csDateDebut, setCsDateDebut] = useState("");
+  const [csDateFin, setCsDateFin] = useState("");
+  const [csData, setCsData] = useState(null);
+  const [csLoading, setCsLoading] = useState(false);
+
+  const chargerCumulSorties = async () => {
+    setCsLoading(true); setCsData(null);
+    try {
+      const matrice = {};
+      const produitsActifs = {};
+      for (const p of produits) {
+        const data = await fetch(`${API}/mouvements/${p.id_produit}`, { headers: headers() }).then((r) => r.json());
+        const sorties = data.sorties || [];
+        for (const s of sorties) {
+          const d = s.date_bon ? s.date_bon.substring(0, 10) : "";
+          const dDebut = csDateDebut ? parseFR(csDateDebut) : ""; const dFin = csDateFin ? parseFR(csDateFin) : ""; if (dDebut && d < dDebut) continue; if (dFin && d > dFin) continue;
+          const nomClient = s.nom_client || "?";
+          const qte = Number(s.quantite) || 0;
+          const montant = qte * (Number(s.prix_unitaire) || 0);
+          if (qte <= 0) continue;
+          if (!matrice[nomClient]) matrice[nomClient] = {};
+          if (!matrice[nomClient][p.id_produit]) matrice[nomClient][p.id_produit] = { qte: 0, montant: 0 };
+          matrice[nomClient][p.id_produit].qte += qte;
+          matrice[nomClient][p.id_produit].montant += montant;
+          if (!produitsActifs[p.id_produit]) produitsActifs[p.id_produit] = { code: p.code_produit, designation: p.designation, totalQte: 0 };
+          produitsActifs[p.id_produit].totalQte += qte;
+        }
+      }
+      const listeProduits = Object.keys(produitsActifs).map((id) => ({ id_produit: id, ...produitsActifs[id] }));
+      const codeDe = (nom) => { const cli = clients.find((c) => c.nom === nom); return cli ? cli.code_client : "zzz"; }; const listeClients = Object.keys(matrice).sort((a, b) => codeDe(a).localeCompare(codeDe(b)));
+      if (listeClients.length === 0) { setCsData({ vide: true }); setCsLoading(false); return; }
+      setCsData({ matrice, listeProduits, listeClients });
+    } catch (err) { setMessage("Erreur de chargement !"); }
+    setCsLoading(false);
+  };
+
+  const montantClient = (nomClient) => {
+    if (!csData || csData.vide) return 0;
+    let total = 0;
+    csData.listeProduits.forEach((p) => { const cell = csData.matrice[nomClient]?.[p.id_produit]; if (cell) total += cell.montant; });
+    return total;
+  };
+  const montantGeneral = () => {
+    if (!csData || csData.vide) return 0;
+    return csData.listeClients.reduce((sum, c) => sum + montantClient(c), 0);
+  };
+  const imprimerCumulSortiesPDF = () => {
+    if (!csData || csData.vide) return;
+    const fmt = (val) => Number(val).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+    const periode = `Periode : ${csDateDebut || "..."} a ${csDateFin || "..."}`;
+    const doc = new jsPDF({ orientation: "landscape" }); const couleur = [13, 110, 253];
+    doc.setFillColor(...couleur); doc.rect(0, 0, 297, 28, "F");
+    doc.addImage(logoCAIE, "JPEG", 3, 2, 22, 22);
+    doc.addImage(logoCAIE, "JPEG", 272, 2, 22, 22);
+    doc.setTextColor(255, 255, 255); doc.setFontSize(14); doc.setFont("helvetica", "bold");
+    doc.text("GESTION DE STOCK", 148, 12, { align: "center" }); doc.setFontSize(11); doc.text("CUMUL DES SORTIES", 148, 22, { align: "center" });
+    doc.setTextColor(0, 0, 0); doc.setFontSize(9); doc.setFont("helvetica", "bold");
+    doc.text(periode, 15, 34);
+    doc.setDrawColor(...couleur); doc.setLineWidth(0.5); doc.line(15, 38, 282, 38);
+    const head = [["Client", ...csData.listeProduits.map((p) => p.code), "Montant (MRU)"]];
+    const body = csData.listeClients.map((nomClient) => [
+      nomClient,
+      ...csData.listeProduits.map((p) => { const cell = csData.matrice[nomClient]?.[p.id_produit]; return cell ? fmt(cell.qte) : "-"; }),
+      fmt(montantClient(nomClient))
+    ]);
+    const foot = [["TOTAL QTE", ...csData.listeProduits.map((p) => fmt(p.totalQte)), fmt(montantGeneral())]];
+    autoTable(doc, {
+      startY: 42,
+      margin: { left: 10, right: 10 },
+      head, body, foot,
+      headStyles: { fillColor: couleur, textColor: 255, fontStyle: "bold", fontSize: 7 },
+      footStyles: { fillColor: [40, 40, 40], textColor: 255, fontStyle: "bold", fontSize: 7 },
+      alternateRowStyles: { fillColor: [249, 249, 249] },
+      styles: { fontSize: 7, cellPadding: 1.5, halign: "right" },
+      columnStyles: { 0: { halign: "left", fontStyle: "bold" } }
+    });
+    doc.output("dataurlnewwindow");
+  };
+
+  const renderCumulSorties = () => (
+    <div>
+      <h4 className="mb-4">📊 Cumul des Sorties</h4>
+      {message && (<div className={`alert ${message.includes("succes") ? "alert-success" : "alert-danger"} alert-dismissible`}>{message}<button className="btn-close" onClick={() => setMessage("")}></button></div>)}
+      <div className="card p-3 mb-3 border-primary">
+        <div className="row g-3 align-items-end">
+          <div className="col-md-3"><label className="form-label fw-bold">Date debut (jj/mm/aaaa)</label><input type="text" className={`form-control ${csDateDebut && !dateValide(csDateDebut) ? "is-invalid" : csDateDebut && dateValide(csDateDebut) ? "is-valid" : ""}`} placeholder="jj/mm/aaaa" maxLength={10} value={csDateDebut} onChange={(e) => { setCsDateDebut(e.target.value); setCsData(null); }} /></div>
+          <div className="col-md-3"><label className="form-label fw-bold">Date fin (jj/mm/aaaa)</label><input type="text" className={`form-control ${csDateFin && !dateValide(csDateFin) ? "is-invalid" : csDateFin && dateValide(csDateFin) ? "is-valid" : ""}`} placeholder="jj/mm/aaaa" maxLength={10} value={csDateFin} onChange={(e) => { setCsDateFin(e.target.value); setCsData(null); }} /></div>
+          <div className="col-md-3"><button className="btn btn-primary w-100" onClick={chargerCumulSorties}>🔍 Afficher</button></div>
+        </div>
+      </div>
+      {csLoading && (<div className="text-center my-4"><div className="spinner-border text-primary"></div></div>)}
+      {csData && csData.vide && (<div className="alert alert-info">Aucune sortie trouvee pour cette periode.</div>)}
+      {csData && !csData.vide && !csLoading && (
+        <div>
+          <div className="text-end mb-2"><button className="btn btn-success" onClick={imprimerCumulSortiesPDF}>Imprimer PDF</button></div>
+          <div className="card p-0" style={{ overflowX: "auto", maxHeight: "65vh", overflowY: "auto" }}>
+            <table className="table table-bordered table-hover table-sm mb-0">
+              <thead className="table-dark">
+                <tr><th>Client</th>{csData.listeProduits.map((p) => (<th key={p.id_produit} className="text-end">{p.code}</th>))}<th className="text-end">Montant (MRU)</th></tr>
+              </thead>
+              <tbody>
+                {csData.listeClients.map((nomClient) => (
+                  <tr key={nomClient}>
+                    <td><strong>{nomClient}</strong></td>
+                    {csData.listeProduits.map((p) => { const cell = csData.matrice[nomClient]?.[p.id_produit]; return (<td key={p.id_produit} className="text-end">{cell ? Number(cell.qte).toLocaleString("fr-FR") : "-"}</td>); })}
+                    <td className="text-end fw-bold text-success">{Number(montantClient(nomClient)).toLocaleString("fr-FR")}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot className="table-success fw-bold">
+                <tr><td>TOTAL QTE</td>{csData.listeProduits.map((p) => (<td key={p.id_produit} className="text-end">{Number(p.totalQte).toLocaleString("fr-FR")}</td>))}<td className="text-end text-success">{Number(montantGeneral()).toLocaleString("fr-FR")}</td></tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
   const renderProduitsClient = () => (
     <div>
       <h4 className="mb-4">📦 Mouvements Produits par Client</h4>
@@ -455,7 +575,7 @@ const imprimerProduitsClientPDF = () => {
 
   useEffect(() => {
     if (!token) return;
-    if (["bon-entree", "bon-sortie", "mouvements", "fiche-stock", "stock-initial", "utilisateurs", "situation-financiere", "versements", "produits-client"].includes(page)) return;
+    if (["bon-entree", "bon-sortie", "mouvements", "fiche-stock", "stock-initial", "utilisateurs", "situation-financiere", "versements", "produits-client", "cumul-sorties"].includes(page)) return;
     setLoading(true); setDonnees([]); setRecherche(""); setShowForm(false); setMessage(""); setBonDetail(null); setShowEditBon(false);
     const url = page === "liste-entree" ? `${API}/bons-entree` : page === "liste-sortie" ? `${API}/bons-sortie` : `${API}/${page}`;
     fetch(url, { headers: headers() }).then((res) => res.json()).then((data) => { setDonnees(data); setLoading(false); }).catch(() => setLoading(false));
@@ -465,7 +585,7 @@ const imprimerProduitsClientPDF = () => {
   const produitsStockFaible = stockData.filter((s) => Number(s.stock_actuel) > 0 && s.stock_minimum !== null && Number(s.stock_actuel) <= Number(s.stock_minimum));
   const totalAlertes = produitsRuptureTotale.length + produitsStockFaible.length;
   const dataStockActuel = stockData.map((s) => ({ name: s.code_produit, designation: s.designation, "Stock Initial": Number(s.stock_initial), "Stock Actuel": Number(s.stock_actuel), "Stock Minimum": Number(s.stock_minimum) || 0 }));
-  const dataEntreesSorties = stockData.map((s) => ({ name: s.code_produit, designation: s.designation, "Entrees": Number(s.total_entree), "Sorties": Number(s.total_sortie) }));
+  const dataEntreesSorties = stockData.map((s) => ({ name: s.code_produit, designation: s.designation, "Total Entre (Init+Entrees)": Number(s.stock_initial) + Number(s.total_entree), "Sorties": Number(s.total_sortie) }));
 
   const resetBon = () => { setBon({ numero_bon: "", date_bon: "", id_fournisseur: "", id_client: "", observation: "" }); setLignes([{ id_produit: "", quantite: "", prix_unitaire: "" }]); setMessage(""); setSaisieDate(""); setSaisieEditionDate(""); };
   const ajouterLigne = () => setLignes([...lignes, { id_produit: "", quantite: "", prix_unitaire: "" }]);
@@ -1055,7 +1175,7 @@ const imprimerProduitsClientPDF = () => {
       </div>
       <div className="card mb-4 p-3">
         <h5 className="mb-3 text-success">📈 Entrees vs Sorties par Produit</h5>
-        <ResponsiveContainer width="100%" height={350}><BarChart data={dataEntreesSorties} margin={{ top: 10, right: 30, left: 0, bottom: 60 }}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" angle={-30} textAnchor="end" interval={0} tick={{ fontSize: 12 }} /><YAxis /><Tooltip formatter={(v, n) => [v, n]} labelFormatter={(l) => { const i = dataEntreesSorties.find((d) => d.name === l); return i ? i.designation : l; }} /><Legend verticalAlign="top" /><Bar dataKey="Entrees" fill="#198754" radius={[4, 4, 0, 0]} /><Bar dataKey="Sorties" fill="#dc3545" radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer>
+        <ResponsiveContainer width="100%" height={350}><BarChart data={dataEntreesSorties} margin={{ top: 10, right: 30, left: 0, bottom: 60 }}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" angle={-30} textAnchor="end" interval={0} tick={{ fontSize: 12 }} /><YAxis /><Tooltip formatter={(v, n) => [v, n]} labelFormatter={(l) => { const i = dataEntreesSorties.find((d) => d.name === l); return i ? i.designation : l; }} /><Legend verticalAlign="top" /><Bar dataKey="Total Entre (Init+Entrees)" fill="#198754" radius={[4, 4, 0, 0]} /><Bar dataKey="Sorties" fill="#dc3545" radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer>
       </div>
     </div>
   );
@@ -1547,7 +1667,7 @@ const imprimerProduitsClientPDF = () => {
 
   const colonnes = { stock: ["code_produit", "designation", "unite", "stock_initial", "total_entree", "total_sortie", "stock_actuel"], produits: ["code_produit", "designation", "unite", "prix_achat", "prix_vente", "stock_minimum"], clients: ["code_client", "nom", "telephone", "adresse"], fournisseurs: ["code_fournisseur", "nom", "telephone", "adresse"], "liste-entree": ["numero_bon", "date_bon", "nom_fournisseur", "observation"], "liste-sortie": ["numero_bon", "date_bon", "nom_client", "observation"] };
   const idCols = { produits: "id_produit", clients: "id_client", fournisseurs: "id_fournisseur" };
-  const titres = { stock: "Stock Actuel", produits: "Produits", clients: "Clients", fournisseurs: "Fournisseurs", "bon-entree": "Nouveau Bon d'Entree", "bon-sortie": "Nouveau Bon de Sortie", "liste-entree": "Liste des Bons d'Entree", "liste-sortie": "Liste des Bons de Sortie", "graphiques": "Graphiques", "mouvements": "Fiche Mouvements", "fiche-stock": "Fiche de Stock", "stock-initial": "Stock Initial", "situation-financiere": "Situation Financiere Client", "versements": "Versements Clients", "produits-client": "Produits par Client", ...(isAdmin ? { "utilisateurs": "Utilisateurs" } : {}) };
+  const titres = { stock: "Stock Actuel", produits: "Produits", clients: "Clients", fournisseurs: "Fournisseurs", "bon-entree": "Nouveau Bon d'Entree", "bon-sortie": "Nouveau Bon de Sortie", "liste-entree": "Liste des Bons d'Entree", "liste-sortie": "Liste des Bons de Sortie", "graphiques": "Graphiques", "mouvements": "Fiche Mouvements", "fiche-stock": "Fiche de Stock", "stock-initial": "Stock Initial", "situation-financiere": "Situation Financiere Client", "versements": "Versements Clients", "produits-client": "Produits par Client", "cumul-sorties": "Cumul des Sorties", ...(isAdmin ? { "utilisateurs": "Utilisateurs" } : {}) };
   const donneesFiltrees = donnees.filter((d) => Object.values(d).some((v) => String(v).toLowerCase().includes(recherche.toLowerCase())));
 
   const renderFormAjout = () => {
@@ -1693,7 +1813,7 @@ const imprimerProduitsClientPDF = () => {
           {Object.keys(titres).map((p) => (
             <button key={p} onClick={() => { setPage(p); resetBon(); setBonDetail(null); setShowEditBon(false); setFicheMouvements(null); setProduitSelectionne(""); setFicheStockData(null); setStockInitialEnEdition(null); }}
               className={`btn me-2 mb-2 ${page === p ? "btn-primary" : "btn-secondary"}`}>
-              {p === "graphiques" ? "📊 " : p === "mouvements" ? "📋 " : p === "fiche-stock" ? "📊 " : p === "stock-initial" ? "📦 " : p === "utilisateurs" ? "👥 " : p === "situation-financiere" ? "💰 " : p === "versements" ? "💳 " : p === "produits-client" ? "🔎 " : ""}{titres[p]}
+              {p === "graphiques" ? "📊 " : p === "mouvements" ? "📋 " : p === "fiche-stock" ? "📊 " : p === "stock-initial" ? "📦 " : p === "utilisateurs" ? "👥 " : p === "situation-financiere" ? "💰 " : p === "versements" ? "💳 " : p === "produits-client" ? "🔎 " : p === "cumul-sorties" ? "🧮 " : ""}{titres[p]}
             </button>
           ))}
         </div>
@@ -1705,6 +1825,7 @@ const imprimerProduitsClientPDF = () => {
           : page === "situation-financiere" ? renderSituationFinanciere()
           : page === "versements" ? renderVersements()
           : page === "produits-client" ? renderProduitsClient()
+          : page === "cumul-sorties" ? renderCumulSorties()
           : page === "utilisateurs" && isAdmin ? renderUtilisateurs()
           : page === "bon-entree" ? renderFormulaireBon("bon-entree")
           : page === "bon-sortie" ? renderFormulaireBon("bon-sortie")
