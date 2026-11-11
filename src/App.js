@@ -167,7 +167,7 @@ function App() {
       else { setMessage("Erreur lors de la modification !"); }
     } catch (err) { setMessage("Erreur de connexion !"); }
   };
-const imprimerVersementsPDF = () => {
+const imprimerVersementsPDF = (mode) => {
     if (!versementsListe || versementsListe.length === 0) return;
     const fmt = (val) => Number(val).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
     const clientObj = clients.find((c) => String(c.id_client) === String(versementsClientFiltre));
@@ -210,7 +210,7 @@ const imprimerVersementsPDF = () => {
         5: { cellWidth: 30 }
       }
     });
-    doc.output("dataurlnewwindow");
+    if (mode === "doc") return doc; doc.output("dataurlnewwindow");
   };
   const supprimerVersementListe = async (id) => {
     if (!window.confirm("Confirmer la suppression ?")) return;
@@ -253,7 +253,7 @@ const imprimerVersementsPDF = () => {
       {versementsLoading && (<div className="text-center my-4"><div className="spinner-border text-primary"></div></div>)}
       {versementsListe.length > 0 && !versementsLoading && (
         <div className="card p-0">
-          <div className="text-end p-2"><button className="btn btn-success" onClick={imprimerVersementsPDF}>Imprimer PDF</button></div>
+          <div className="text-end p-2"><button className="btn btn-success" onClick={imprimerVersementsPDF}>Imprimer PDF</button>{versementsClientFiltre && isAdmin && (<button className="btn btn-primary ms-2" onClick={() => { if (!versementsListe.every((v) => String(v.id_client) === String(versementsClientFiltre))) { setMessage("La liste affichee ne correspond pas au client choisi : cliquez d'abord sur Afficher."); return; } ouvrirEnvoiEmail({ id_client: versementsClientFiltre, type_document: "versements", titre: "Releve des versements", nomFichier: "Versements_" + codeClientDe(versementsClientFiltre) + ".pdf", creerDoc: () => imprimerVersementsPDF("doc") }); }}>✉️ Envoyer par email</button>)}{versementsClientFiltre && (<button className="btn btn-outline-secondary ms-2" onClick={() => { if (!versementsListe.every((v) => String(v.id_client) === String(versementsClientFiltre))) { setMessage("La liste affichee ne correspond pas au client choisi : cliquez d'abord sur Afficher."); return; } partagerPDF({ titre: "Releve des versements", nomFichier: "Versements_" + codeClientDe(versementsClientFiltre) + ".pdf", creerDoc: () => imprimerVersementsPDF("doc") }); }}>📤 Partager</button>)}{renderEmailModal()}</div>
           <table className="table table-bordered table-hover mb-0">
             <thead className="table-dark"><tr><th>Date</th><th>Client</th><th>Mode</th><th>Référence</th><th className="text-end">Montant (MRU)</th><th>Observation</th>{isAdmin && <th className="text-center">Action</th>}</tr></thead>
             <tbody>
@@ -317,7 +317,7 @@ const imprimerVersementsPDF = () => {
     } catch (err) { setMessage("Erreur de chargement !"); }
     setPcLoading(false);
   };
-const imprimerProduitsClientPDF = () => {
+const imprimerProduitsClientPDF = (mode) => {
     if (!pcData || pcData.length === 0) return;
     const fmt = (val) => Number(val).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
     const clientObj = clients.find((c) => String(c.id_client) === String(pcClientSelectionne));
@@ -361,10 +361,11 @@ const imprimerProduitsClientPDF = () => {
       });
       posY = doc.lastAutoTable.finalY + 10;
     });
-    doc.output("dataurlnewwindow");
+    if (mode === "doc") return doc; doc.output("dataurlnewwindow");
   };
 
   // ETATS ET FONCTIONS EMAIL
+  const codeClientDe = (id) => { const x = clients.find((y) => String(y.id_client) === String(id)); return x ? x.code_client : String(id); };
   const [emailModal, setEmailModal] = useState(null);
   const [emailEnCours, setEmailEnCours] = useState(false);
   const [paramEmailEnvoi, setParamEmailEnvoi] = useState("");
@@ -622,7 +623,7 @@ const imprimerProduitsClientPDF = () => {
 
       {pcData && !pcLoading && (
         <div>
-          {pcData.length > 0 && <div className="text-end mb-3"><button className="btn btn-success" onClick={imprimerProduitsClientPDF}>Imprimer PDF</button></div>}
+          {pcData.length > 0 && <div className="text-end mb-3"><button className="btn btn-success" onClick={imprimerProduitsClientPDF}>Imprimer PDF</button>{isAdmin && (<button className="btn btn-primary ms-2" onClick={() => ouvrirEnvoiEmail({ id_client: pcClientSelectionne, type_document: "produits-client", titre: "Produits par client", nomFichier: "Produits_Client_" + codeClientDe(pcClientSelectionne) + ".pdf", creerDoc: () => imprimerProduitsClientPDF("doc") })}>✉️ Envoyer par email</button>)}<button className="btn btn-outline-secondary ms-2" onClick={() => partagerPDF({ titre: "Produits par client", nomFichier: "Produits_Client_" + codeClientDe(pcClientSelectionne) + ".pdf", creerDoc: () => imprimerProduitsClientPDF("doc") })}>📤 Partager</button>{renderEmailModal()}</div>}
           {pcData.length === 0 ? (
             <div className="alert alert-info">Aucun mouvement trouvé pour ce client.</div>
           ) : (
@@ -1166,7 +1167,6 @@ const imprimerProduitsClientPDF = () => {
       {message && (<div className={`alert ${message.includes("succes") ? "alert-success" : "alert-danger"} alert-dismissible`}>{message}<button className="btn-close" onClick={() => setMessage("")}></button></div>)}
       {loadingStockInitial ? (<div className="text-center my-4"><div className="spinner-border text-primary"></div></div>) : (
         <div className="card p-0">
-          <div className="text-end p-2"><button className="btn btn-success" onClick={imprimerVersementsPDF}>Imprimer PDF</button></div>
           <table className="table table-bordered table-hover mb-0">
             <thead className="table-dark">
               <tr><th>Code</th><th>Designation</th><th>Unite</th><th className="text-center">Quantite Initiale</th><th className="text-center">Prix Unitaire (MRU)</th><th className="text-center">Date Saisie (jj/mm/aaaa)</th><th className="text-center">Action</th></tr>
