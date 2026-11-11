@@ -61,7 +61,7 @@ function App() {
   const [bon, setBon] = useState({ numero_bon: "", date_bon: "", id_fournisseur: "", id_client: "", observation: "" });
   const [lignes, setLignes] = useState([{ id_produit: "", quantite: "", prix_unitaire: "" }]);
   const [newProduit, setNewProduit] = useState({ code_produit: "", designation: "", unite: "", prix_achat: "", prix_vente: "", stock_minimum: "" });
-  const [newClient, setNewClient] = useState({ code_client: "", nom: "", telephone: "", adresse: "" });
+  const [newClient, setNewClient] = useState({ code_client: "", nom: "", telephone: "", adresse: "", email: "" });
   const [newFournisseur, setNewFournisseur] = useState({ code_fournisseur: "", nom: "", telephone: "", adresse: "" });
   const [showForm, setShowForm] = useState(false);
   const [bonDetail, setBonDetail] = useState(null);
@@ -364,6 +364,117 @@ const imprimerProduitsClientPDF = () => {
     doc.output("dataurlnewwindow");
   };
 
+  // ETATS ET FONCTIONS EMAIL
+  const [emailModal, setEmailModal] = useState(null);
+  const [emailEnCours, setEmailEnCours] = useState(false);
+  const [paramEmailEnvoi, setParamEmailEnvoi] = useState("");
+  const [journalEnvois, setJournalEnvois] = useState([]);
+
+  const chargerParametres = async () => {
+    try {
+      const p = await fetch(`${API}/parametres`, { headers: headers() }).then((r) => r.json());
+      setParamEmailEnvoi(p.email_envoi || "");
+      const j = await fetch(`${API}/journal-envois`, { headers: headers() }).then((r) => r.json());
+      setJournalEnvois(Array.isArray(j) ? j : []);
+    } catch (err) { setMessage("Erreur de chargement des parametres !"); }
+  };
+  useEffect(() => { if (page === "parametres" && isAdmin) chargerParametres(); }, [page]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const enregistrerParametres = async () => {
+    try {
+      const r = await fetch(`${API}/parametres`, { method: "PUT", headers: headers(), body: JSON.stringify({ email_envoi: paramEmailEnvoi }) });
+      const d = await r.json();
+      if (d.success) setMessage("Parametres enregistres avec succes !"); else setMessage("Erreur : " + (d.error || ""));
+    } catch (err) { setMessage("Erreur de connexion !"); }
+  };
+
+  const testerEmail = async () => {
+    setMessage("Envoi du message de test en cours...");
+    try {
+      const r = await fetch(`${API}/envoyer-email/test`, { method: "POST", headers: headers() });
+      const d = await r.json();
+      if (d.success) { setMessage("Email de test envoye avec succes a " + d.destinataire); chargerParametres(); } else setMessage("Erreur : " + (d.error || ""));
+    } catch (err) { setMessage("Erreur de connexion !"); }
+  };
+
+  const ouvrirEnvoiEmail = async ({ id_client, type_document, titre, nomFichier, creerDoc }) => {
+    try {
+      const liste = await fetch(`${API}/clients`, { headers: headers() }).then((r) => r.json());
+      const cli = Array.isArray(liste) ? liste.find((x) => String(x.id_client) === String(id_client)) : null;
+      if (!cli) { setMessage("Client introuvable !"); return; }
+      if (!cli.email) { setMessage("Ce client n'a pas d'adresse email. Ajoutez-la dans le menu Clients (bouton Modifier)."); return; }
+      setEmailModal({ id_client, type_document, nomFichier, creerDoc, nomClient: cli.nom, destinataire: cli.email, objet: titre + " - " + cli.nom, message: "Bonjour,\n\nVeuillez trouver ci-joint le document suivant : " + titre + ".\n\nCordialement,\nCAIE", erreur: "" });
+    } catch (err) { setMessage("Erreur de connexion !"); }
+  };
+
+  const envoyerEmail = async () => {
+    if (!emailModal) return;
+    setEmailEnCours(true);
+    try {
+      const doc = emailModal.creerDoc();
+      if (!doc) throw new Error("Document indisponible");
+      const pdfBase64 = doc.output("datauristring").split(",")[1];
+      const r = await fetch(`${API}/envoyer-email`, { method: "POST", headers: headers(), body: JSON.stringify({ id_client: emailModal.id_client, type_document: emailModal.type_document, objet: emailModal.objet, message: emailModal.message, nomFichier: emailModal.nomFichier, pdfBase64 }) });
+      const d = await r.json();
+      if (d.success) { setMessage("Email envoye avec succes a " + d.destinataire); setEmailModal(null); }
+      else setEmailModal({ ...emailModal, erreur: d.error || "Echec de l'envoi" });
+    } catch (err) { setEmailModal({ ...emailModal, erreur: err.message || "Erreur de connexion" }); }
+    setEmailEnCours(false);
+  };
+
+  const partagerPDF = async ({ titre, nomFichier, creerDoc }) => {
+    try {
+      const doc = creerDoc();
+      if (!doc) return;
+      const fichier = new File([doc.output("blob")], nomFichier, { type: "application/pdf" });
+      if (navigator.canShare && navigator.canShare({ files: [fichier] })) { await navigator.share({ files: [fichier], title: titre, text: titre }); }
+      else { doc.save(nomFichier); setMessage("PDF telecharge avec succes : joignez-le dans WhatsApp ou votre messagerie."); }
+    } catch (err) { if (err && err.name !== "AbortError") setMessage("Partage impossible : " + (err.message || "")); }
+  };
+
+  const renderEmailModal = () => {
+    if (!emailModal) return null;
+    return (
+      <div className="modal d-block" style={{ backgroundColor: "rgba(0,0,0,0.5)" }}>
+        <div className="modal-dialog modal-lg"><div className="modal-content">
+          <div className="modal-header bg-primary text-white"><h5 className="modal-title">✉️ Envoyer par email</h5><button className="btn-close btn-close-white" onClick={() => setEmailModal(null)} disabled={emailEnCours}></button></div>
+          <div className="modal-body">
+            {emailModal.erreur && (<div className="alert alert-danger">{emailModal.erreur}</div>)}
+            <div className="mb-2"><label className="form-label fw-bold">Destinataire</label><input className="form-control" value={emailModal.nomClient + " <" + emailModal.destinataire + ">"} disabled /></div>
+            <div className="mb-2"><label className="form-label fw-bold">Objet</label><input className="form-control" value={emailModal.objet} onChange={(e) => setEmailModal({ ...emailModal, objet: e.target.value })} /></div>
+            <div className="mb-2"><label className="form-label fw-bold">Message</label><textarea className="form-control" rows="7" value={emailModal.message} onChange={(e) => setEmailModal({ ...emailModal, message: e.target.value })}></textarea></div>
+            <div className="text-muted small">Piece jointe : {emailModal.nomFichier}</div>
+          </div>
+          <div className="modal-footer"><button className="btn btn-secondary" onClick={() => setEmailModal(null)} disabled={emailEnCours}>Annuler</button><button className="btn btn-primary" onClick={envoyerEmail} disabled={emailEnCours}>{emailEnCours ? "Envoi en cours..." : "Envoyer"}</button></div>
+        </div></div>
+      </div>
+    );
+  };
+
+  const renderParametres = () => (
+    <div>
+      <h4 className="mb-4">⚙️ Parametres</h4>
+      {message && (<div className={`alert ${message.includes("succes") ? "alert-success" : message.includes("en cours") ? "alert-info" : "alert-danger"} alert-dismissible`}>{message}<button className="btn-close" onClick={() => setMessage("")}></button></div>)}
+      <div className="card p-3 mb-4 border-primary">
+        <h5 className="mb-3">Envoi des etats par email</h5>
+        <div className="row g-3 align-items-end">
+          <div className="col-md-6"><label className="form-label fw-bold">Email-Envoi</label><input type="email" className="form-control" placeholder="adresse@gmail.com" value={paramEmailEnvoi} onChange={(e) => setParamEmailEnvoi(e.target.value)} /></div>
+          <div className="col-md-6"><button className="btn btn-success me-2" onClick={enregistrerParametres}>Enregistrer</button><button className="btn btn-outline-primary" onClick={testerEmail}>✉️ Envoyer un email de test</button></div>
+        </div>
+        <div className="text-muted small mt-2">Cette adresse recoit les reponses des clients ainsi qu'une copie de chaque email envoye.</div>
+      </div>
+      <div className="d-flex justify-content-between align-items-center mb-2"><h5 className="mb-0">Journal des envois</h5><button className="btn btn-outline-secondary btn-sm" onClick={chargerParametres}>Actualiser</button></div>
+      {journalEnvois.length === 0 ? (<div className="alert alert-light border">Aucun envoi pour le moment.</div>) : (
+        <div className="card p-0" style={{ maxHeight: "50vh", overflowY: "auto" }}>
+          <table className="table table-bordered table-hover table-sm mb-0">
+            <thead className="table-dark"><tr><th>Date</th><th>Client</th><th>Destinataire</th><th>Document</th><th>Statut</th><th>Detail</th></tr></thead>
+            <tbody>{journalEnvois.map((j) => (<tr key={j.id_envoi}><td>{new Date(j.date_envoi).toLocaleString("fr-FR")}</td><td>{j.nom_client || "-"}</td><td>{j.destinataire}</td><td>{j.type_document}</td><td>{j.statut === "envoye" ? <span className="badge bg-success">Envoye</span> : <span className="badge bg-danger">Echec</span>}</td><td><small className="text-muted">{j.erreur || ""}</small></td></tr>))}</tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+
 // ETATS CUMUL DES SORTIES
   const [csDateDebut, setCsDateDebut] = useState("");
   const [csDateFin, setCsDateFin] = useState("");
@@ -575,7 +686,7 @@ const imprimerProduitsClientPDF = () => {
 
   useEffect(() => {
     if (!token) return;
-    if (["bon-entree", "bon-sortie", "mouvements", "fiche-stock", "stock-initial", "utilisateurs", "situation-financiere", "versements", "produits-client", "cumul-sorties"].includes(page)) return;
+    if (["bon-entree", "bon-sortie", "mouvements", "fiche-stock", "stock-initial", "utilisateurs", "situation-financiere", "versements", "produits-client", "cumul-sorties", "parametres"].includes(page)) return;
     setLoading(true); setDonnees([]); setRecherche(""); setShowForm(false); setMessage(""); setBonDetail(null); setShowEditBon(false);
     const url = page === "liste-entree" ? `${API}/bons-entree` : page === "liste-sortie" ? `${API}/bons-sortie` : `${API}/${page}`;
     fetch(url, { headers: headers() }).then((res) => res.json()).then((data) => { setDonnees(data); setLoading(false); }).catch(() => setLoading(false));
@@ -632,7 +743,7 @@ const imprimerProduitsClientPDF = () => {
       if (data.success) {
         setMessage("Ajoute avec succes !"); setShowForm(false);
         setNewProduit({ code_produit: "", designation: "", unite: "", prix_achat: "", prix_vente: "", stock_minimum: "" });
-        setNewClient({ code_client: "", nom: "", telephone: "", adresse: "" });
+        setNewClient({ code_client: "", nom: "", telephone: "", adresse: "", email: "" });
         setNewFournisseur({ code_fournisseur: "", nom: "", telephone: "", adresse: "" });
         fetch(`${API}/${page}`, { headers: headers() }).then((r) => r.json()).then(setDonnees); chargerStats();
       } else { setMessage("Erreur : " + data.error); }
@@ -1300,7 +1411,7 @@ const imprimerProduitsClientPDF = () => {
     } catch (err) { setMessage("Erreur de connexion : " + err.message); }
   };
 
-  const imprimerSituationFinancierePDF = () => {
+  const imprimerSituationFinancierePDF = (mode) => {
     if (!sfSituationData) return;
     const { client, date_inventaire, lignes, totaux } = sfSituationData; // eslint-disable-line no-unused-vars
     // Fonction formatage compatible jsPDF (pas de caractères spéciaux)
@@ -1354,7 +1465,7 @@ const imprimerProduitsClientPDF = () => {
     const pageHeight = doc.internal.pageSize.height;
     doc.setFontSize(8); doc.setTextColor(150, 150, 150); doc.setFont("helvetica", "normal");
     doc.text(`Document genere le ${new Date().toLocaleDateString("fr-FR")} a ${new Date().toLocaleTimeString("fr-FR")}`, 148, pageHeight - 8, { align: "center" });
-    doc.output("dataurlnewwindow");
+    if (mode === "doc") return doc; doc.output("dataurlnewwindow");
   };
 
   const renderSituationFinanciere = () => (
@@ -1517,7 +1628,7 @@ const imprimerProduitsClientPDF = () => {
                     </div>
                     <div>
                       <button className="btn btn-secondary me-2" onClick={() => setSfEtape(2)}>← Retour</button>
-                      <button className="btn btn-success" onClick={imprimerSituationFinancierePDF}>🖨️ Imprimer PDF</button>
+                      <><button className="btn btn-success" onClick={imprimerSituationFinancierePDF}>🖨️ Imprimer PDF</button>{isAdmin && (<button className="btn btn-primary ms-2" onClick={() => ouvrirEnvoiEmail({ id_client: sfSituationData.client.id_client, type_document: "situation-financiere", titre: "Situation financiere", nomFichier: "Situation_Financiere_" + sfSituationData.client.code_client + ".pdf", creerDoc: () => imprimerSituationFinancierePDF("doc") })}>✉️ Envoyer par email</button>)}<button className="btn btn-outline-secondary ms-2" onClick={() => partagerPDF({ titre: "Situation financiere - " + sfSituationData.client.nom, nomFichier: "Situation_Financiere_" + sfSituationData.client.code_client + ".pdf", creerDoc: () => imprimerSituationFinancierePDF("doc") })}>📤 Partager</button>{renderEmailModal()}</>
                     </div>
                   </div>
 
@@ -1665,14 +1776,14 @@ const imprimerProduitsClientPDF = () => {
     </div>
   );
 
-  const colonnes = { stock: ["code_produit", "designation", "unite", "stock_initial", "total_entree", "total_sortie", "stock_actuel"], produits: ["code_produit", "designation", "unite", "prix_achat", "prix_vente", "stock_minimum"], clients: ["code_client", "nom", "telephone", "adresse"], fournisseurs: ["code_fournisseur", "nom", "telephone", "adresse"], "liste-entree": ["numero_bon", "date_bon", "nom_fournisseur", "observation"], "liste-sortie": ["numero_bon", "date_bon", "nom_client", "observation"] };
+  const colonnes = { stock: ["code_produit", "designation", "unite", "stock_initial", "total_entree", "total_sortie", "stock_actuel"], produits: ["code_produit", "designation", "unite", "prix_achat", "prix_vente", "stock_minimum"], clients: ["code_client", "nom", "telephone", "adresse", "email"], fournisseurs: ["code_fournisseur", "nom", "telephone", "adresse"], "liste-entree": ["numero_bon", "date_bon", "nom_fournisseur", "observation"], "liste-sortie": ["numero_bon", "date_bon", "nom_client", "observation"] };
   const idCols = { produits: "id_produit", clients: "id_client", fournisseurs: "id_fournisseur" };
-  const titres = { stock: "Stock Actuel", produits: "Produits", clients: "Clients", fournisseurs: "Fournisseurs", "bon-entree": "Nouveau Bon d'Entree", "bon-sortie": "Nouveau Bon de Sortie", "liste-entree": "Liste des Bons d'Entree", "liste-sortie": "Liste des Bons de Sortie", "graphiques": "Graphiques", "mouvements": "Fiche Mouvements", "fiche-stock": "Fiche de Stock", "stock-initial": "Stock Initial", "situation-financiere": "Situation Financiere Client", "versements": "Versements Clients", "produits-client": "Produits par Client", "cumul-sorties": "Cumul des Sorties", ...(isAdmin ? { "utilisateurs": "Utilisateurs" } : {}) };
+  const titres = { stock: "Stock Actuel", produits: "Produits", clients: "Clients", fournisseurs: "Fournisseurs", "bon-entree": "Nouveau Bon d'Entree", "bon-sortie": "Nouveau Bon de Sortie", "liste-entree": "Liste des Bons d'Entree", "liste-sortie": "Liste des Bons de Sortie", "graphiques": "Graphiques", "mouvements": "Fiche Mouvements", "fiche-stock": "Fiche de Stock", "stock-initial": "Stock Initial", "situation-financiere": "Situation Financiere Client", "versements": "Versements Clients", "produits-client": "Produits par Client", "cumul-sorties": "Cumul des Sorties", ...(isAdmin ? { "utilisateurs": "Utilisateurs", "parametres": "Parametres" } : {}) };
   const donneesFiltrees = donnees.filter((d) => Object.values(d).some((v) => String(v).toLowerCase().includes(recherche.toLowerCase())));
 
   const renderFormAjout = () => {
     if (page === "produits") return (<div className="card p-3 mb-3"><h5 className="mb-3">Nouveau Produit</h5><div className="row g-2"><div className="col-md-2"><input className="form-control" placeholder="Code *" value={newProduit.code_produit} onChange={(e) => setNewProduit({ ...newProduit, code_produit: e.target.value })} /></div><div className="col-md-3"><input className="form-control" placeholder="Designation *" value={newProduit.designation} onChange={(e) => setNewProduit({ ...newProduit, designation: e.target.value })} /></div><div className="col-md-1"><input className="form-control" placeholder="Unite" value={newProduit.unite} onChange={(e) => setNewProduit({ ...newProduit, unite: e.target.value })} /></div><div className="col-md-2"><input className="form-control" type="number" placeholder="Prix Achat" value={newProduit.prix_achat} onChange={(e) => setNewProduit({ ...newProduit, prix_achat: e.target.value })} /></div><div className="col-md-2"><input className="form-control" type="number" placeholder="Prix Vente" value={newProduit.prix_vente} onChange={(e) => setNewProduit({ ...newProduit, prix_vente: e.target.value })} /></div><div className="col-md-2"><input className="form-control" type="number" placeholder="Stock Min" value={newProduit.stock_minimum} onChange={(e) => setNewProduit({ ...newProduit, stock_minimum: e.target.value })} /></div></div><div className="mt-2"><button className="btn btn-success me-2" onClick={ajouterElement}>Enregistrer</button><button className="btn btn-secondary" onClick={() => setShowForm(false)}>Annuler</button></div></div>);
-    if (page === "clients") return (<div className="card p-3 mb-3"><h5 className="mb-3">Nouveau Client</h5><div className="row g-2"><div className="col-md-2"><input className="form-control" placeholder="Code *" value={newClient.code_client} onChange={(e) => setNewClient({ ...newClient, code_client: e.target.value })} /></div><div className="col-md-3"><input className="form-control" placeholder="Nom *" value={newClient.nom} onChange={(e) => setNewClient({ ...newClient, nom: e.target.value })} /></div><div className="col-md-3"><input className="form-control" placeholder="Telephone" value={newClient.telephone} onChange={(e) => setNewClient({ ...newClient, telephone: e.target.value })} /></div><div className="col-md-4"><input className="form-control" placeholder="Adresse" value={newClient.adresse} onChange={(e) => setNewClient({ ...newClient, adresse: e.target.value })} /></div></div><div className="mt-2"><button className="btn btn-success me-2" onClick={ajouterElement}>Enregistrer</button><button className="btn btn-secondary" onClick={() => setShowForm(false)}>Annuler</button></div></div>);
+    if (page === "clients") return (<div className="card p-3 mb-3"><h5 className="mb-3">Nouveau Client</h5><div className="row g-2"><div className="col-md-2"><input className="form-control" placeholder="Code *" value={newClient.code_client} onChange={(e) => setNewClient({ ...newClient, code_client: e.target.value })} /></div><div className="col-md-3"><input className="form-control" placeholder="Nom *" value={newClient.nom} onChange={(e) => setNewClient({ ...newClient, nom: e.target.value })} /></div><div className="col-md-3"><input className="form-control" placeholder="Telephone" value={newClient.telephone} onChange={(e) => setNewClient({ ...newClient, telephone: e.target.value })} /></div><div className="col-md-4"><input className="form-control" placeholder="Adresse" value={newClient.adresse} onChange={(e) => setNewClient({ ...newClient, adresse: e.target.value })} /></div><div className="col-md-4"><input type="email" className="form-control" placeholder="Email" value={newClient.email || ""} onChange={(e) => setNewClient({ ...newClient, email: e.target.value })} /></div></div><div className="mt-2"><button className="btn btn-success me-2" onClick={ajouterElement}>Enregistrer</button><button className="btn btn-secondary" onClick={() => setShowForm(false)}>Annuler</button></div></div>);
     if (page === "fournisseurs") return (<div className="card p-3 mb-3"><h5 className="mb-3">Nouveau Fournisseur</h5><div className="row g-2"><div className="col-md-2"><input className="form-control" placeholder="Code *" value={newFournisseur.code_fournisseur} onChange={(e) => setNewFournisseur({ ...newFournisseur, code_fournisseur: e.target.value })} /></div><div className="col-md-3"><input className="form-control" placeholder="Nom *" value={newFournisseur.nom} onChange={(e) => setNewFournisseur({ ...newFournisseur, nom: e.target.value })} /></div><div className="col-md-3"><input className="form-control" placeholder="Telephone" value={newFournisseur.telephone} onChange={(e) => setNewFournisseur({ ...newFournisseur, telephone: e.target.value })} /></div><div className="col-md-4"><input className="form-control" placeholder="Adresse" value={newFournisseur.adresse} onChange={(e) => setNewFournisseur({ ...newFournisseur, adresse: e.target.value })} /></div></div><div className="mt-2"><button className="btn btn-success me-2" onClick={ajouterElement}>Enregistrer</button><button className="btn btn-secondary" onClick={() => setShowForm(false)}>Annuler</button></div></div>);
   };
 
@@ -1813,7 +1924,7 @@ const imprimerProduitsClientPDF = () => {
           {Object.keys(titres).map((p) => (
             <button key={p} onClick={() => { setPage(p); resetBon(); setBonDetail(null); setShowEditBon(false); setFicheMouvements(null); setProduitSelectionne(""); setFicheStockData(null); setStockInitialEnEdition(null); }}
               className={`btn me-2 mb-2 ${page === p ? "btn-primary" : "btn-secondary"}`}>
-              {p === "graphiques" ? "📊 " : p === "mouvements" ? "📋 " : p === "fiche-stock" ? "📊 " : p === "stock-initial" ? "📦 " : p === "utilisateurs" ? "👥 " : p === "situation-financiere" ? "💰 " : p === "versements" ? "💳 " : p === "produits-client" ? "🔎 " : p === "cumul-sorties" ? "🧮 " : ""}{titres[p]}
+              {p === "graphiques" ? "📊 " : p === "mouvements" ? "📋 " : p === "fiche-stock" ? "📊 " : p === "stock-initial" ? "📦 " : p === "utilisateurs" ? "👥 " : p === "situation-financiere" ? "💰 " : p === "versements" ? "💳 " : p === "produits-client" ? "🔎 " : p === "cumul-sorties" ? "🧮 " : p === "parametres" ? "⚙️ " : ""}{titres[p]}
             </button>
           ))}
         </div>
@@ -1827,6 +1938,7 @@ const imprimerProduitsClientPDF = () => {
           : page === "produits-client" ? renderProduitsClient()
           : page === "cumul-sorties" ? renderCumulSorties()
           : page === "utilisateurs" && isAdmin ? renderUtilisateurs()
+          : page === "parametres" && isAdmin ? renderParametres()
           : page === "bon-entree" ? renderFormulaireBon("bon-entree")
           : page === "bon-sortie" ? renderFormulaireBon("bon-sortie")
           : page === "liste-entree" ? renderListeBons("entree")
@@ -1856,7 +1968,7 @@ const imprimerProduitsClientPDF = () => {
             <div className="modal-header bg-warning"><h5 className="modal-title">✏️ Modifier {page === "produits" ? "Produit" : page === "clients" ? "Client" : "Fournisseur"}</h5><button className="btn-close" onClick={() => setShowEditModal(false)}></button></div>
             <div className="modal-body">
               {page === "produits" && (<div className="row g-3"><div className="col-md-2"><label className="form-label">Code</label><input className="form-control" value={elementAModifier.code_produit || ""} onChange={(e) => setElementAModifier({ ...elementAModifier, code_produit: e.target.value })} /></div><div className="col-md-4"><label className="form-label">Designation</label><input className="form-control" value={elementAModifier.designation || ""} onChange={(e) => setElementAModifier({ ...elementAModifier, designation: e.target.value })} /></div><div className="col-md-2"><label className="form-label">Unite</label><input className="form-control" value={elementAModifier.unite || ""} onChange={(e) => setElementAModifier({ ...elementAModifier, unite: e.target.value })} /></div><div className="col-md-2"><label className="form-label">Prix Achat</label><input type="number" className="form-control" value={elementAModifier.prix_achat || ""} onChange={(e) => setElementAModifier({ ...elementAModifier, prix_achat: e.target.value })} /></div><div className="col-md-2"><label className="form-label">Prix Vente</label><input type="number" className="form-control" value={elementAModifier.prix_vente || ""} onChange={(e) => setElementAModifier({ ...elementAModifier, prix_vente: e.target.value })} /></div><div className="col-md-2"><label className="form-label">Stock Minimum</label><input type="number" className="form-control" value={elementAModifier.stock_minimum || ""} onChange={(e) => setElementAModifier({ ...elementAModifier, stock_minimum: e.target.value })} /></div></div>)}
-              {(page === "clients" || page === "fournisseurs") && (<div className="row g-3"><div className="col-md-3"><label className="form-label">Code</label><input className="form-control" value={elementAModifier[page === "clients" ? "code_client" : "code_fournisseur"] || ""} onChange={(e) => setElementAModifier({ ...elementAModifier, [page === "clients" ? "code_client" : "code_fournisseur"]: e.target.value })} /></div><div className="col-md-3"><label className="form-label">Nom</label><input className="form-control" value={elementAModifier.nom || ""} onChange={(e) => setElementAModifier({ ...elementAModifier, nom: e.target.value })} /></div><div className="col-md-3"><label className="form-label">Telephone</label><input className="form-control" value={elementAModifier.telephone || ""} onChange={(e) => setElementAModifier({ ...elementAModifier, telephone: e.target.value })} /></div><div className="col-md-3"><label className="form-label">Adresse</label><input className="form-control" value={elementAModifier.adresse || ""} onChange={(e) => setElementAModifier({ ...elementAModifier, adresse: e.target.value })} /></div></div>)}
+              {(page === "clients" || page === "fournisseurs") && (<div className="row g-3"><div className="col-md-3"><label className="form-label">Code</label><input className="form-control" value={elementAModifier[page === "clients" ? "code_client" : "code_fournisseur"] || ""} onChange={(e) => setElementAModifier({ ...elementAModifier, [page === "clients" ? "code_client" : "code_fournisseur"]: e.target.value })} /></div><div className="col-md-3"><label className="form-label">Nom</label><input className="form-control" value={elementAModifier.nom || ""} onChange={(e) => setElementAModifier({ ...elementAModifier, nom: e.target.value })} /></div><div className="col-md-3"><label className="form-label">Telephone</label><input className="form-control" value={elementAModifier.telephone || ""} onChange={(e) => setElementAModifier({ ...elementAModifier, telephone: e.target.value })} /></div><div className="col-md-3"><label className="form-label">Adresse</label><input className="form-control" value={elementAModifier.adresse || ""} onChange={(e) => setElementAModifier({ ...elementAModifier, adresse: e.target.value })} /></div>{page === "clients" && (<div className="col-md-6"><label className="form-label">Email</label><input type="email" className="form-control" value={elementAModifier.email || ""} onChange={(e) => setElementAModifier({ ...elementAModifier, email: e.target.value })} /></div>)}</div>)}
             </div>
             <div className="modal-footer"><button className="btn btn-secondary" onClick={() => setShowEditModal(false)}>Annuler</button><button className="btn btn-warning" onClick={enregistrerModification}>💾 Enregistrer</button></div>
           </div></div>
