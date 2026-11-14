@@ -33,6 +33,9 @@ function App() {
   const [loginErreur, setLoginErreur] = useState("");
   const [loadingLogin, setLoadingLogin] = useState(false);
   const isAdmin = utilisateur?.role === "admin";
+  const isVisiteur = utilisateur?.role === "visiteur";
+  // Pages masquees pour le role Visiteur (lecture seule)
+  const pagesInterditesVisiteur = ["bon-entree", "bon-sortie", "situation-financiere", "versements"];
 
   const headers = () => ({ "Content-Type": "application/json", "Authorization": `Bearer ${token}` });
 
@@ -1131,7 +1134,7 @@ const imprimerProduitsClientPDF = (mode) => {
             <div className="col-md-3"><input className="form-control" placeholder="Login *" value={newUtilisateur.login} onChange={(e) => setNewUtilisateur({ ...newUtilisateur, login: e.target.value })} /></div>
             <div className="col-md-3"><input className="form-control" placeholder="Nom complet *" value={newUtilisateur.nom} onChange={(e) => setNewUtilisateur({ ...newUtilisateur, nom: e.target.value })} /></div>
             <div className="col-md-3"><input type="password" className="form-control" placeholder="Mot de passe *" value={newUtilisateur.mot_de_passe} onChange={(e) => setNewUtilisateur({ ...newUtilisateur, mot_de_passe: e.target.value })} /></div>
-            <div className="col-md-3"><select className="form-select" value={newUtilisateur.role} onChange={(e) => setNewUtilisateur({ ...newUtilisateur, role: e.target.value })}><option value="utilisateur">Utilisateur</option><option value="admin">Admin</option></select></div>
+            <div className="col-md-3"><select className="form-select" value={newUtilisateur.role} onChange={(e) => setNewUtilisateur({ ...newUtilisateur, role: e.target.value })}><option value="utilisateur">Utilisateur</option><option value="visiteur">Visiteur</option><option value="admin">Admin</option></select></div>
           </div>
           <div className="mt-2"><button className="btn btn-success me-2" onClick={ajouterUtilisateur}>Enregistrer</button><button className="btn btn-secondary" onClick={() => setShowFormUtilisateur(false)}>Annuler</button></div>
         </div>
@@ -1139,7 +1142,7 @@ const imprimerProduitsClientPDF = (mode) => {
       {loadingUtilisateurs ? (<div className="text-center"><div className="spinner-border text-primary"></div></div>) : (
         <table className="table table-bordered table-hover">
           <thead className="table-dark"><tr><th>Login</th><th>Nom</th><th>Role</th><th>Statut</th><th>Actions</th></tr></thead>
-          <tbody>{utilisateursData.map((u) => (<tr key={u.id_utilisateur}><td>{u.login}</td><td>{u.nom}</td><td><span className={`badge ${u.role === "admin" ? "bg-danger" : "bg-primary"}`}>{u.role === "admin" ? "👑 Admin" : "👤 Utilisateur"}</span></td><td><span className={`badge ${u.actif ? "bg-success" : "bg-secondary"}`}>{u.actif ? "Actif" : "Inactif"}</span></td><td><button className="btn btn-warning btn-sm me-2" onClick={() => setUtilisateurAModifier({ ...u, mot_de_passe: "" })}>✏️ Modifier</button>{u.login !== "admin" && <button className="btn btn-danger btn-sm" onClick={() => supprimerUtilisateur(u.id_utilisateur)}>🗑️ Supprimer</button>}</td></tr>))}</tbody>
+          <tbody>{utilisateursData.map((u) => (<tr key={u.id_utilisateur}><td>{u.login}</td><td>{u.nom}</td><td><span className={`badge ${u.role === "admin" ? "bg-danger" : u.role === "visiteur" ? "bg-secondary" : "bg-primary"}`}>{u.role === "admin" ? "👑 Admin" : u.role === "visiteur" ? "👁️ Visiteur" : "👤 Utilisateur"}</span></td><td><span className={`badge ${u.actif ? "bg-success" : "bg-secondary"}`}>{u.actif ? "Actif" : "Inactif"}</span></td><td><button className="btn btn-warning btn-sm me-2" onClick={() => setUtilisateurAModifier({ ...u, mot_de_passe: "" })}>✏️ Modifier</button>{u.login !== "admin" && <button className="btn btn-danger btn-sm" onClick={() => supprimerUtilisateur(u.id_utilisateur)}>🗑️ Supprimer</button>}</td></tr>))}</tbody>
         </table>
       )}
       {utilisateurAModifier && (
@@ -1150,7 +1153,7 @@ const imprimerProduitsClientPDF = (mode) => {
               <div className="mb-3"><label className="form-label">Login</label><input className="form-control" value={utilisateurAModifier.login} onChange={(e) => setUtilisateurAModifier({ ...utilisateurAModifier, login: e.target.value })} /></div>
               <div className="mb-3"><label className="form-label">Nom</label><input className="form-control" value={utilisateurAModifier.nom} onChange={(e) => setUtilisateurAModifier({ ...utilisateurAModifier, nom: e.target.value })} /></div>
               <div className="mb-3"><label className="form-label">Nouveau mot de passe (laisser vide pour ne pas changer)</label><input type="password" className="form-control" value={utilisateurAModifier.mot_de_passe} onChange={(e) => setUtilisateurAModifier({ ...utilisateurAModifier, mot_de_passe: e.target.value })} /></div>
-              <div className="mb-3"><label className="form-label">Role</label><select className="form-select" value={utilisateurAModifier.role} onChange={(e) => setUtilisateurAModifier({ ...utilisateurAModifier, role: e.target.value })}><option value="utilisateur">Utilisateur</option><option value="admin">Admin</option></select></div>
+              <div className="mb-3"><label className="form-label">Role</label><select className="form-select" value={utilisateurAModifier.role} onChange={(e) => setUtilisateurAModifier({ ...utilisateurAModifier, role: e.target.value })}><option value="utilisateur">Utilisateur</option><option value="visiteur">Visiteur</option><option value="admin">Admin</option></select></div>
               <div className="mb-3"><label className="form-label">Statut</label><select className="form-select" value={utilisateurAModifier.actif} onChange={(e) => setUtilisateurAModifier({ ...utilisateurAModifier, actif: e.target.value === "true" })}><option value="true">Actif</option><option value="false">Inactif</option></select></div>
             </div>
             <div className="modal-footer"><button className="btn btn-secondary" onClick={() => setUtilisateurAModifier(null)}>Annuler</button><button className="btn btn-warning" onClick={modifierUtilisateur}>💾 Enregistrer</button></div>
@@ -1175,12 +1178,13 @@ const imprimerProduitsClientPDF = (mode) => {
               {stockInitialData.map((p) => (
                 <tr key={p.id_produit} className={Number(stockInitialEdite[p.id_produit]?.quantite) > 0 ? "table-success" : ""}>
                   <td><strong>{p.code_produit}</strong></td><td>{p.designation}</td><td>{p.unite}</td>
-                  <td className="text-center"><input type="number" className="form-control form-control-sm text-center" min="0" style={{ width: "100px", margin: "auto" }} value={stockInitialEdite[p.id_produit]?.quantite || 0} onChange={(e) => setStockInitialEdite({ ...stockInitialEdite, [p.id_produit]: { ...stockInitialEdite[p.id_produit], quantite: e.target.value } })} /></td>
-                  <td className="text-center"><input type="number" className="form-control form-control-sm text-center" min="0" style={{ width: "120px", margin: "auto" }} value={stockInitialEdite[p.id_produit]?.prix_unitaire || 0} onChange={(e) => setStockInitialEdite({ ...stockInitialEdite, [p.id_produit]: { ...stockInitialEdite[p.id_produit], prix_unitaire: e.target.value } })} /></td>
-                  <td className="text-center"><input type="text" placeholder="jj/mm/aaaa" maxLength={10} className={`form-control form-control-sm text-center ${stockInitialSaisieDates[p.id_produit] && !dateValide(stockInitialSaisieDates[p.id_produit]) ? "is-invalid" : stockInitialSaisieDates[p.id_produit] && dateValide(stockInitialSaisieDates[p.id_produit]) ? "is-valid" : ""}`} style={{ width: "130px", margin: "auto" }} value={stockInitialSaisieDates[p.id_produit] || ""} onChange={(e) => setStockInitialSaisieDates({ ...stockInitialSaisieDates, [p.id_produit]: e.target.value })} /></td>
+                  <td className="text-center"><input type="number" disabled={isVisiteur} className="form-control form-control-sm text-center" min="0" style={{ width: "100px", margin: "auto" }} value={stockInitialEdite[p.id_produit]?.quantite || 0} onChange={(e) => setStockInitialEdite({ ...stockInitialEdite, [p.id_produit]: { ...stockInitialEdite[p.id_produit], quantite: e.target.value } })} /></td>
+                  <td className="text-center"><input type="number" disabled={isVisiteur} className="form-control form-control-sm text-center" min="0" style={{ width: "120px", margin: "auto" }} value={stockInitialEdite[p.id_produit]?.prix_unitaire || 0} onChange={(e) => setStockInitialEdite({ ...stockInitialEdite, [p.id_produit]: { ...stockInitialEdite[p.id_produit], prix_unitaire: e.target.value } })} /></td>
+                  <td className="text-center"><input type="text" disabled={isVisiteur} placeholder="jj/mm/aaaa" maxLength={10} className={`form-control form-control-sm text-center ${stockInitialSaisieDates[p.id_produit] && !dateValide(stockInitialSaisieDates[p.id_produit]) ? "is-invalid" : stockInitialSaisieDates[p.id_produit] && dateValide(stockInitialSaisieDates[p.id_produit]) ? "is-valid" : ""}`} style={{ width: "130px", margin: "auto" }} value={stockInitialSaisieDates[p.id_produit] || ""} onChange={(e) => setStockInitialSaisieDates({ ...stockInitialSaisieDates, [p.id_produit]: e.target.value })} /></td>
                   <td className="text-center">
-                    <button className="btn btn-success btn-sm me-1" onClick={() => enregistrerStockInitial(p.id_produit)}>💾 Enregistrer</button>
-                    <button className="btn btn-warning btn-sm" onClick={() => ouvrirModificationStockInitial(p)}>✏️ Modifier</button>
+                    {!isVisiteur && <button className="btn btn-success btn-sm me-1" onClick={() => enregistrerStockInitial(p.id_produit)}>💾 Enregistrer</button>}
+                    {isAdmin && <button className="btn btn-warning btn-sm" onClick={() => ouvrirModificationStockInitial(p)}>✏️ Modifier</button>}
+                    {isVisiteur && <span className="text-muted small">Consultation seulement</span>}
                   </td>
                 </tr>
               ))}
@@ -1189,7 +1193,7 @@ const imprimerProduitsClientPDF = (mode) => {
         </div>
       )}
 
-      {stockInitialEnEdition && (
+      {stockInitialEnEdition && isAdmin && (
         <div className="modal show d-block" style={{ backgroundColor: "rgba(0,0,0,0.5)" }}>
           <div className="modal-dialog"><div className="modal-content">
             <div className="modal-header bg-warning"><h5 className="modal-title">✏️ Modifier Stock Initial — {stockInitialData.find(p => p.id_produit === stockInitialEnEdition)?.designation}</h5><button className="btn-close" onClick={() => setStockInitialEnEdition(null)}></button></div>
@@ -1872,7 +1876,7 @@ const imprimerProduitsClientPDF = (mode) => {
         <span className="navbar-brand fw-bold fs-4">📦 Gestion de Stock</span>
         <img src="/logo.png" alt="CAIE Logo" style={{ height: "55px", width: "55px", objectFit: "contain", borderRadius: "50%", background: "white", padding: "3px" }} />
         <div className="d-flex align-items-center">
-          <span className="text-white me-3">{isAdmin ? "👑" : "👤"} <strong>{utilisateur?.nom}</strong><span className={`badge ms-2 ${isAdmin ? "bg-warning text-dark" : "bg-light text-dark"}`}>{isAdmin ? "Admin" : "Utilisateur"}</span></span>
+          <span className="text-white me-3">{isAdmin ? "👑" : isVisiteur ? "👁️" : "👤"} <strong>{utilisateur?.nom}</strong><span className={`badge ms-2 ${isAdmin ? "bg-warning text-dark" : "bg-light text-dark"}`}>{isAdmin ? "Admin" : isVisiteur ? "Visiteur" : "Utilisateur"}</span></span>
           <button className="btn btn-outline-light btn-sm" onClick={seDeconnecter}>🚪 Deconnexion</button>
         </div>
       </nav>
@@ -1921,7 +1925,7 @@ const imprimerProduitsClientPDF = (mode) => {
         )}
 
         <div className="mb-4">
-          {Object.keys(titres).map((p) => (
+          {Object.keys(titres).filter((p) => !(isVisiteur && pagesInterditesVisiteur.includes(p))).map((p) => (
             <button key={p} onClick={() => { setPage(p); resetBon(); setBonDetail(null); setShowEditBon(false); setFicheMouvements(null); setProduitSelectionne(""); setFicheStockData(null); setStockInitialEnEdition(null); }}
               className={`btn me-2 mb-2 ${page === p ? "btn-primary" : "btn-secondary"}`}>
               {p === "graphiques" ? "📊 " : p === "mouvements" ? "📋 " : p === "fiche-stock" ? "📊 " : p === "stock-initial" ? "📦 " : p === "utilisateurs" ? "👥 " : p === "situation-financiere" ? "💰 " : p === "versements" ? "💳 " : p === "produits-client" ? "🔎 " : p === "cumul-sorties" ? "🧮 " : p === "parametres" ? "⚙️ " : ""}{titres[p]}
@@ -1929,7 +1933,8 @@ const imprimerProduitsClientPDF = (mode) => {
           ))}
         </div>
 
-        {page === "graphiques" ? renderGraphiques()
+        {isVisiteur && pagesInterditesVisiteur.includes(page) ? (<div className="alert alert-warning">Acces non autorise pour le role Visiteur.</div>)
+          : page === "graphiques" ? renderGraphiques()
           : page === "mouvements" ? renderMouvements()
           : page === "fiche-stock" ? renderFicheStock()
           : page === "stock-initial" ? renderStockInitial()
@@ -1947,10 +1952,10 @@ const imprimerProduitsClientPDF = (mode) => {
             <>
               <div className="d-flex justify-content-between align-items-center mb-3">
                 <h4>{titres[page]}</h4>
-                {["produits", "clients", "fournisseurs"].includes(page) && (<button className="btn btn-success" onClick={() => setShowForm(!showForm)}>{showForm ? "Annuler" : "+ Ajouter"}</button>)}
+                {["produits", "clients", "fournisseurs"].includes(page) && !isVisiteur && (<button className="btn btn-success" onClick={() => setShowForm(!showForm)}>{showForm ? "Annuler" : "+ Ajouter"}</button>)}
               </div>
               {message && (<div className={`alert ${message.includes("succes") ? "alert-success" : "alert-danger"} alert-dismissible`}>{message}<button className="btn-close" onClick={() => setMessage("")}></button></div>)}
-              {showForm && renderFormAjout()}
+              {showForm && !isVisiteur && renderFormAjout()}
               <input type="text" className="form-control mb-3" placeholder="Rechercher..." value={recherche} onChange={(e) => setRecherche(e.target.value)} />
               {loading ? (<div className="text-center"><div className="spinner-border text-primary"></div></div>) : (
                 <table className="table table-bordered table-striped table-hover">
